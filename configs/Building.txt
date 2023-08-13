@@ -1,0 +1,32 @@
+root_dir = ../datasets/mega/building-pixsfm/
+dataset_name = mega
+exp_name = building-no
+batch_size = 1024
+scale = 2.0
+num_epochs = 100
+
+use_skybox = True
+
+### render a camera path(through interpolation between poses)
+render_traj = True 
+
+### render camera poses from training dataset
+render_train = False
+
+render_rgb = True
+render_depth = False
+
+### render derived normal or not
+render_normal = False
+
+### render semantic labels or not, set to False if no g.t. semantic labels
+render_semantic = False
+
+### appearance embeddings
+embed_a = True
+embed_a_len = 8
+
+### mask embeddings
+embed_msk = True
+
+random_bg = True

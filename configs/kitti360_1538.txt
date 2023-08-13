@@ -1,0 +1,38 @@
+root_dir = ./KITTI-360
+dataset_name = kitti
+exp_name = seq0_1538-1601
+batch_size = 1024
+scale = 8.0
+num_epochs = 150
+
+kitti_scene = seq0_1538-1601
+start = 1538
+train_frames = 64
+center_pose = [1130.46719983, 3969.92954086, 115.97836078]
+val_list = [1545,1555,1565,1575,1585,1595]
+
+### render a camera path(through interpolation between poses)
+render_traj = True 
+
+### render camera poses from training dataset
+render_train = False
+
+render_rgb = True
+render_depth = False
+
+### render derived normal or not
+render_normal = False
+
+### render semantic labels or not, set to False if no g.t. semantic labels
+render_semantic = False
+
+### appearance embeddings
+embed_a = True
+embed_a_len = 8
+
+### mask embeddings
+embed_msk = False
+
+random_bg = True
+
+depth_mono = True
