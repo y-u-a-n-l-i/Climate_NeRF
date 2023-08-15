@@ -140,7 +140,7 @@ class NeRFSystem(LightningModule):
         if self.hparams.use_exposure:
             kwargs['exposure'] = batch['exposure']
         if self.hparams.embed_a:
-            embedding_a = self.embedding_a(torch.tensor([0]).cuda()).detach()
+            embedding_a = self.embedding_a(torch.tensor([0]).cuda()).detach().expand_as(embedding_a)
             kwargs['embedding_a'] = embedding_a
 
         if split == 'train':
@@ -166,7 +166,7 @@ class NeRFSystem(LightningModule):
         dataset = dataset_dict[self.hparams.dataset_name]
         kwargs = {'root_dir': self.hparams.root_dir,
                   'downsample': self.hparams.downsample,
-                  'use_sem': self.hparams.render_semantic,
+                  'use_sem': False,
                   'depth_mono': self.hparams.depth_mono,
                   'sem_conf_path': self.hparams.sem_conf_path,
                   'sem_ckpt_path': self.hparams.sem_ckpt_path}
@@ -201,7 +201,9 @@ class NeRFSystem(LightningModule):
         net_params = []        
         if self.hparams.embed_msk:
             load_ckpt(self.msk_model, self.hparams.ckpt_path, model_name='msk_model', prefixes_to_ignore=['embedding_a', 'normal_net.params'])
-        
+        for n, p in self.model.named_parameters():
+            net_params += [p] 
+
         embeda_params = []
         if self.hparams.embed_a:
             load_ckpt(self.embedding_a, self.hparams.ckpt_path, model_name='embedding_a', prefixes_to_ignore=['model', 'normal_net'])
@@ -243,18 +245,16 @@ class NeRFSystem(LightningModule):
             rgb_stylized = self.stylizer.forward(rgb_gt, semantic_labels).reshape(-1, 3)
             self.stylized_rgb.append(rgb_stylized.cuda())
         
-        torch.stack(self.stylized_rgb, dim=0)
+        self.stylized_rgb = torch.stack(self.stylized_rgb, dim=0)
 
     def training_step(self, batch, batch_nb, *args):
         tensorboard = self.logger.experiment
 
         results = self(batch, split='train')
-
         batch['rgb'] = self.stylized_rgb[batch['img_idxs'], batch['pix_idxs']]
 
         loss_kwargs = {'dataset_name': self.hparams.dataset_name,
-                       'up_sem': False,
-                       'distill': True}
+                       'stylize': True}
         loss_d = self.loss(results, batch, **loss_kwargs)
 
         loss = sum(lo.mean() for lo in loss_d.values())
@@ -264,7 +264,7 @@ class NeRFSystem(LightningModule):
         self.log('lr', self.net_opt.param_groups[0]['lr'])
         self.log('train/loss', loss)
         self.log('train/psnr', self.train_psnr, True)
-        if self.global_step%10000 == 0 and self.global_step>0:
+        if self.global_step%1000 == 0 and self.global_step>0:
             print('[val in training]')
             batch = self.test_dataset[0]
             for i in batch:

@@ -234,8 +234,7 @@ class NGP(nn.Module):
             rgbs = self.rgb_net(torch.cat([d, feat_rgb, kwargs['embedding_a']], 1))
         else:
             rgbs = self.rgb_net(torch.cat([d, feat_rgb], 1))
-            
-
+        
         if self.rgb_act == 'None': # rgbs is log-radiance
             if kwargs.get('output_radiance', False): # output HDR map
                 rgbs = TruncExp.apply(rgbs)

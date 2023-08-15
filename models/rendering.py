@@ -213,28 +213,32 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
                 exp_step_factor, model.grid_size, MAX_SAMPLES)
     results['total_samples'] = total_samples
     
-    
     for k, v in kwargs.items(): # supply additional inputs, repeated per ray
         if isinstance(v, torch.Tensor):
             kwargs[k] = torch.repeat_interleave(v[rays_a[:, 0]], rays_a[:, 2], 0)
-    sigmas, rgbs, normals_raw, normals_pred, sems, _ = model(xyzs, dirs, **kwargs)
+    if not kwargs.get("stylize", True):
+        sigmas, rgbs, normals_raw, normals_pred, sems, _ = model(xyzs, dirs, **kwargs)
+    else:
+        sigmas, rgbs, normals_pred, sems = model.forward_test(xyzs, dirs, **kwargs)
     results['sigma'] = sigmas
     results['xyzs'] = xyzs
     results['rays_a'] = rays_a
-    normals_raw = normals_raw.detach()
 
     results['vr_samples'], results['opacity'], results['depth'], results['rgb'], results['normal_pred'], results['semantic'], results['ws'] = \
         VolumeRenderer.apply(sigmas.contiguous(), rgbs.contiguous(), normals_pred.contiguous(), 
                                 sems.contiguous(), results['deltas'], results['ts'],
                                 rays_a, kwargs.get('T_threshold', 1e-4), kwargs.get('classes', 7))
     
-    normals_diff = (normals_raw-normals_pred)**2
-    dirs = F.normalize(dirs, p=2, dim=-1, eps=1e-6)
-    normals_ori = torch.clamp(torch.sum(normals_pred*dirs, dim=-1), min=0.)**2 # don't keep dim!
-    
-    results['Ro'], results['Rp'] = \
-        RefLoss.apply(sigmas.detach().contiguous(), normals_diff.contiguous(), normals_ori.contiguous(), results['deltas'], results['ts'],
-                            rays_a, kwargs.get('T_threshold', 1e-4))
+    if kwargs.get("stylize", True):
+        normals_raw = normals_raw.detach()
+
+        normals_diff = (normals_raw-normals_pred)**2
+        dirs = F.normalize(dirs, p=2, dim=-1, eps=1e-6)
+        normals_ori = torch.clamp(torch.sum(normals_pred*dirs, dim=-1), min=0.)**2 # don't keep dim!
+        
+        results['Ro'], results['Rp'] = \
+            RefLoss.apply(sigmas.detach().contiguous(), normals_diff.contiguous(), normals_ori.contiguous(), results['deltas'], results['ts'],
+                                rays_a, kwargs.get('T_threshold', 1e-4))
         
     if kwargs.get('use_skybox', False):
         rgb_bg = model.forward_skybox(rays_d)

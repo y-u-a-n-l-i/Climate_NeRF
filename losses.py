@@ -92,40 +92,34 @@ class NeRFLoss(nn.Module):
             d['rgb'] = (1-kwargs['mask']) * (results['rgb']-target['rgb'])**2
         else:
             d['rgb'] = (results['rgb']-target['rgb'])**2
-    
-        o = results['opacity']+1e-10
-        # encourage opacity to be either 0 or 1 to avoid floater
-        d['opacity'] = self.lambda_opa*(-o*torch.log(o))
-    
-        if kwargs.get('normal_p', False):
-            d['Rp'] = self.lambda_normal_rp * (results['Rp']-torch.zeros_like(results['Rp']).cuda()) # for ref-nerf model
-        
-        if self.lambda_distortion > 0:
-            d['distortion'] = self.lambda_distortion * \
-            DistortionLoss.apply(results['ws'], results['deltas'],
-                                    results['ts'], results['rays_a'])
 
-        if kwargs.get('normal_mono', False):
-            d['normal_mono'] = self.lambda_normal_mono * torch.exp(-results['depth'].detach()/kwargs.get('scale', 1))[:, None] * (target['normal']-results['normal_pred'])**2
+        if not kwargs.get('stylize', False):
+            o = results['opacity']+1e-10
+            # encourage opacity to be either 0 or 1 to avoid floater
+            d['opacity'] = self.lambda_opa*(-o*torch.log(o))
         
-        if kwargs.get('semantic', False):
-            d['CELoss'] = self.lambda_semantic*self.CrossEntropyLoss(results['semantic'], target['label'])
-            sky_mask = torch.where(target['label']==4, 1., 0.)
-            d['sky_depth'] = self.lambda_sky*sky_mask*torch.exp(-results['depth'])
-        if kwargs.get('depth_mono', False): # for kitti360 dataset
-            depth_2d = target['depth'] / 25
-            mask = depth_2d>0
-            weight = torch.zeros_like(depth_2d).cuda()
-            weight[mask] = 1.
-            scale, shift = compute_scale_and_shift(results['depth'][mask].detach(), depth_2d[mask])
-            d['depth_mono'] = weight * self.lambda_depth_mono * torch.exp(-results['depth'].detach()/kwargs.get('scale', 1)) * (scale * results['depth'] + shift - depth_2d)**2
-                
-        flag = 0
-        for (i, n) in d.items():
-            if torch.any(torch.isnan(n)):
-                print(f'nan in d[{i}]')
-                print(f'max: {torch.max(n)}')
-                flag = 1
+            if kwargs.get('normal_p', False):
+                d['Rp'] = self.lambda_normal_rp * (results['Rp']-torch.zeros_like(results['Rp']).cuda()) # for ref-nerf model
+            
+            if self.lambda_distortion > 0:
+                d['distortion'] = self.lambda_distortion * \
+                DistortionLoss.apply(results['ws'], results['deltas'],
+                                        results['ts'], results['rays_a'])
+
+            if kwargs.get('normal_mono', False):
+                d['normal_mono'] = self.lambda_normal_mono * torch.exp(-results['depth'].detach()/kwargs.get('scale', 1))[:, None] * (target['normal']-results['normal_pred'])**2
+            
+            if kwargs.get('semantic', False):
+                d['CELoss'] = self.lambda_semantic*self.CrossEntropyLoss(results['semantic'], target['label'])
+                sky_mask = torch.where(target['label']==4, 1., 0.)
+                d['sky_depth'] = self.lambda_sky*sky_mask*torch.exp(-results['depth'])
+            if kwargs.get('depth_mono', False): # for kitti360 dataset
+                depth_2d = target['depth'] / 25
+                mask = depth_2d>0
+                weight = torch.zeros_like(depth_2d).cuda()
+                weight[mask] = 1.
+                scale, shift = compute_scale_and_shift(results['depth'][mask].detach(), depth_2d[mask])
+                d['depth_mono'] = weight * self.lambda_depth_mono * torch.exp(-results['depth'].detach()/kwargs.get('scale', 1)) * (scale * results['depth'] + shift - depth_2d)**2
             
         return d
 

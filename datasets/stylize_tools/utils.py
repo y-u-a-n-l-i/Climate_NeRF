@@ -73,4 +73,4 @@ class Stylizer:
         out_img = self.p_pro.process(out_img, cont_pilimg)
         out_img = smooth_filter(out_img, cont_pilimg, f_radius=15, f_edge=1e-1)
 
-        return transforms.ToTensor()(out_img)
+        return transforms.ToTensor()(out_img).reshape(-1, 3)

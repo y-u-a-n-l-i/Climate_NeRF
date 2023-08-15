@@ -219,7 +219,9 @@ class NeRFSystem(LightningModule):
         if self.hparams.embed_msk:
             load_ckpt(self.msk_model, self.hparams.weight_path, model_name='msk_model', prefixes_to_ignore=['model', 'embedding_a'])
 
-        net_params = []        
+        net_params = []
+        for n, p in self.named_parameters():
+            net_params += [p]  
         opts = []
         # self.net_opt = FusedAdam(net_params, self.hparams.lr, eps=1e-8)
         self.net_opt = Adam(net_params, self.hparams.lr, eps=1e-8)
