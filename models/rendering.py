@@ -216,7 +216,7 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
     for k, v in kwargs.items(): # supply additional inputs, repeated per ray
         if isinstance(v, torch.Tensor):
             kwargs[k] = torch.repeat_interleave(v[rays_a[:, 0]], rays_a[:, 2], 0)
-    if not kwargs.get("stylize", True):
+    if not kwargs.get("stylize", False):
         sigmas, rgbs, normals_raw, normals_pred, sems, _ = model(xyzs, dirs, **kwargs)
     else:
         sigmas, rgbs, normals_pred, sems = model.forward_test(xyzs, dirs, **kwargs)
@@ -229,7 +229,7 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
                                 sems.contiguous(), results['deltas'], results['ts'],
                                 rays_a, kwargs.get('T_threshold', 1e-4), kwargs.get('classes', 7))
     
-    if kwargs.get("stylize", True):
+    if not kwargs.get("stylize", False):
         normals_raw = normals_raw.detach()
 
         normals_diff = (normals_raw-normals_pred)**2

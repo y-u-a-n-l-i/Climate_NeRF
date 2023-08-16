@@ -9,6 +9,7 @@ from .photo_gif import GIFSmoothing
 from PIL import Image
 from mmseg.apis import inference_model, init_model
 from mmseg.utils import get_classes
+from einops import rearrange
 
 class Stylizer:
     def __init__(self, styl_img_path, kwargs):
@@ -72,5 +73,6 @@ class Stylizer:
 
         out_img = self.p_pro.process(out_img, cont_pilimg)
         out_img = smooth_filter(out_img, cont_pilimg, f_radius=15, f_edge=1e-1)
+        out_img_tensor = transforms.ToTensor()(out_img)
 
-        return transforms.ToTensor()(out_img).reshape(-1, 3)
+        return rearrange(out_img_tensor, "c h w -> (h w) c")

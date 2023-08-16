@@ -264,17 +264,18 @@ class NeRFSystem(LightningModule):
         self.log('lr', self.net_opt.param_groups[0]['lr'])
         self.log('train/loss', loss)
         self.log('train/psnr', self.train_psnr, True)
-        if self.global_step%1000 == 0 and self.global_step>0:
-            print('[val in training]')
+        if self.global_step%1000 == 0:
             batch = self.test_dataset[0]
             for i in batch:
                 if isinstance(batch[i], torch.Tensor):
                     batch[i] = batch[i].cuda()
             results = self(batch, split='test')
             w, h = self.img_wh
+            rgb_gt = rearrange(self.stylized_rgb[0], '(h w) c -> c h w', h=h)
             rgb_pred = rearrange(results['rgb'], '(h w) c -> c h w', h=h)
             depth_pred = depth2img(rearrange(results['depth'].cpu().numpy(), '(h w) -> h w', h=h))
             depth_pred = rearrange(depth_pred, 'h w c -> c h w', h=h)
+            tensorboard.add_image('img/render0_gt', rgb_gt.cpu().numpy(), self.global_step)
             tensorboard.add_image('img/render0', rgb_pred.cpu().numpy(), self.global_step)
 
         return loss
