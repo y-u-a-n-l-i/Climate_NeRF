@@ -118,7 +118,6 @@ def render_for_test(hparams, split='test'):
     os.makedirs(frames_dir, exist_ok=True)
 
     frame_series = []
-    depth_raw_series = []
     depth_series = []
     points_series = []
     normal_series = []
@@ -169,7 +168,6 @@ def render_for_test(hparams, split='test'):
             semantic_series.append(sem_frame)
         if hparams.render_depth:
             depth_raw = rearrange(results['depth'].cpu().numpy(), '(h w) -> h w', h=h)
-            depth_raw_series.append(depth_raw)
             depth = depth2img(depth_raw, scale=2*hparams.scale)
             depth_series.append(depth)
             cv2.imwrite(os.path.join(frames_dir, '{:0>3d}-depth.png'.format(img_idx)), cv2.cvtColor(depth, cv2.COLOR_RGB2BGR))
@@ -197,10 +195,6 @@ def render_for_test(hparams, split='test'):
         imageio.mimsave(os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}', 'render_traj_depth.mp4' if not hparams.render_train else "circle_path_depth.mp4"),
                         depth_series,
                         fps=30, macro_block_size=1)
-        
-        depth_raw_all = np.stack(depth_raw_series) #(n_frames, h ,w)
-        path = f'results/{hparams.dataset_name}/{hparams.exp_name}/depth_raw.npy'
-        np.save(path, depth_raw_all)
 
     if hparams.render_points:
         points_all = np.stack(points_series)

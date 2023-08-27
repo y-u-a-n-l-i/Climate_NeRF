@@ -31,3 +31,4 @@ embed_a_len = 8
 embed_msk = True
 
 random_bg = True
+use_skybox = True

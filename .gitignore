@@ -140,9 +140,7 @@ dmypy.json
 ./logs/
 ./results/
 README.md
-360
 results
-tnt
 logs
 ckpts
 data
