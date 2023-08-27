@@ -2,17 +2,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 class Plane():
-    def __init__(self, params=[1, 1, 1, 1]):
-        # Define a 3D plane: 
-        # ax + by + cz + d = 0
-        # normal * (p - center) = 0
-        a, b, c, d = params
-        normal = np.array([a, b, c])
-        norm = np.linalg.norm(normal)
-        normal = normal / norm
-        center = (-d/norm) * normal
-
-        self.normal = normal 
+    def __init__(self, normal, center):
+        self.normal = normal
+        self.center_original = center 
         self.center = center
     
     def normal(self):
@@ -23,6 +15,10 @@ class Plane():
 
     def move_by_distance(self, d):
         new_center = self.center + self.normal * d 
+        self.center = new_center
+    
+    def set_relative_distance_to_orignal(self, d):
+        new_center = self.center_original + self.normal * d
         self.center = new_center
     
     def square_error(self, points):

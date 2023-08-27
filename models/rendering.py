@@ -165,7 +165,22 @@ def __render_rays_test(model, rays_o, rays_d, hits_t, **kwargs):
     normal_raw = torch.zeros(N_rays, 3, device=device)
     sem = torch.zeros(N_rays, classes, device=device)
     mask = torch.zeros(N_rays, device=device)
-    
+
+    simulator = kwargs.get('simulator', False)
+    if simulator:
+        img_idx = kwargs.get('img_idx', 0)
+        sim_kwargs = {
+            # Smog params
+            'img_idx': img_idx,
+            'rays_o': rays_o,
+            'rays_d': rays_d,
+            'hits_t': hits_t, 
+            'opacity': opacity,
+            'depth': depth,
+            'rgb': rgb
+            # Water params
+        }
+        simulator.simulate_before_marching(**sim_kwargs)
     # Perform volume rendering
     total_samples = \
         volume_render(
@@ -173,6 +188,24 @@ def __render_rays_test(model, rays_o, rays_d, hits_t, **kwargs):
             opacity, depth, rgb, normal_pred, normal_raw, sem,
             **kwargs
         )
+
+    if simulator:
+        depth_smooth = kwargs.get('depth_smooth', None)
+        if depth_smooth is not None:
+            depth_sim = depth_smooth
+        else:
+            depth_sim = depth
+        sim_kwargs = {
+            # Smog params
+            # Water params
+            'model': model,
+            'rays_o': rays_o,
+            'rays_d': rays_d,
+            'depth': depth_sim,
+            'rgb': rgb,
+            'kwargs': kwargs 
+        }
+        mask = simulator.simulate_after_marching(**sim_kwargs)
     
     results = {}
     results['opacity'] = opacity # (h*w)

@@ -106,6 +106,8 @@ def get_opts():
                         help='render rgb series')
     parser.add_argument('--render_depth', action='store_true', default=False,
                         help='render depth series')
+    parser.add_argument('--render_depth_raw', action='store_true', default=False,
+                        help='save depth_raw.npy')
     parser.add_argument('--render_normal', action='store_true', default=False,
                         help='render normal series')
     parser.add_argument('--render_semantic', action='store_true', default=False,
@@ -116,4 +118,33 @@ def get_opts():
                         help='render depth points')
     parser.add_argument('--chunk_size', type=int, default=131072, 
                         help='Divide image into chunks for rendering')
+    
+    # Simulation
+    parser.add_argument('--simulate', default=None, 
+                        help='Simulation effect: [smog, water, snow]')
+    parser.add_argument('--depth_path', help='path to depth_raw.npy')
+    # Smog
+    parser.add_argument('--depth_bound', type=float, default=0.9)
+    parser.add_argument('--sigma', type=float, default=1.0)
+    parser.add_argument('--rgb', nargs='+', type=float, default=[1.0, 1.0, 1.0])
+    # water
+    parser.add_argument('--water_height', type=float, default=0.0)
+    parser.add_argument('--plane_path', help='path to plane parameters')
+    parser.add_argument('--refraction_idx', type=float, default=1.33)
+    parser.add_argument('--gf_r', type=int, default=5, help='Guided filter, filter radius')
+    parser.add_argument('--gf_eps', type=float, default=0.1, help='Guided filter, regularization term')
+    parser.add_argument('--wave_len', type=float, default=1.0, help='Length of wave plane')
+    parser.add_argument('--wave_ampl', type=int, default=2e6, help='Amplitude constant of wave')
+    # panorama
+    parser.add_argument('--pano_hw', type=int, nargs='+', default=[512, 1024], help='h, w of panorama image')
+    parser.add_argument('--pano_radius', type=float, default=0.1, help='Set ray origin on the sphere at (0, 0, 0) with radius')
+    parser.add_argument('--v_forward', type=float, nargs='+', default=[1, 0, 0])
+    parser.add_argument('--v_down',    type=float, nargs='+', default=[0, 1, 0])
+    parser.add_argument('--v_right',   type=float, nargs='+', default=[0, 0, 1])
+    parser.add_argument('--pano_path', help='path to panorama image')
+    # glossy 
+    parser.add_argument('--gl_theta', type=float, default=0.01)
+    parser.add_argument('--gl_sharpness', type=float, default=1000)
+    parser.add_argument('--refract_decay', type=float, default=-1)
+    
     return parser.parse_args()

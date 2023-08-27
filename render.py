@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn.functional as F
 import imageio
 import numpy as np
 import cv2
@@ -10,9 +11,10 @@ from models.networks import NGP
 from models.rendering import render
 from datasets import dataset_dict
 from datasets.ray_utils import get_rays
-from utils import load_ckpt
+from utils import load_ckpt, guided_filter
 from opt import get_opts
 from einops import rearrange
+from simulate import get_simulator
 
 def depth2img(depth, scale=16):
     depth = depth/scale
@@ -32,10 +34,13 @@ def semantic2img(sem_label, classes):
 
 def render_chunks(model, rays_o, rays_d, chunk_size, **kwargs):
     chunk_n = math.ceil(rays_o.shape[0]/chunk_size)
+    d = kwargs.get('depth_smooth', None)
     results = {}
     for i in range(chunk_n):
         rays_o_chunk = rays_o[i*chunk_size: (i+1)*chunk_size]
         rays_d_chunk = rays_d[i*chunk_size: (i+1)*chunk_size]
+        if d is not None:
+            kwargs['depth_smooth'] = d[i*chunk_size: (i+1)*chunk_size]
         ret = render(model, rays_o_chunk, rays_d_chunk, **kwargs)
         for k in ret:
             if k not in results:
@@ -116,8 +121,39 @@ def render_for_test(hparams, split='test'):
 
     frames_dir = f'results/{hparams.dataset_name}/{hparams.exp_name}/frames'
     os.makedirs(frames_dir, exist_ok=True)
+    if hparams.simulate:
+        simulate_kwargs = {
+            'depth_bound': hparams.depth_bound,
+            'sigma': hparams.sigma,
+            'rgb': hparams.rgb, 
+            'depth_path': hparams.depth_path,
+            # water params
+            'water_height': hparams.water_height,
+            'plane_path': hparams.plane_path,
+            'refraction_idx': hparams.refraction_idx,
+            'pano_path': hparams.pano_path,
+            'v_forward': hparams.v_forward,
+            'v_down': hparams.v_down,
+            'v_right': hparams.v_right,
+            'theta': hparams.gl_theta,
+            'sharpness': hparams.gl_sharpness, 
+            'wave_len': hparams.wave_len,
+            'wave_ampl': hparams.wave_ampl,
+            'refract_decay': hparams.refract_decay
+        }
+        simulator = get_simulator(
+            effect=hparams.simulate,
+            device='cuda',
+            **simulate_kwargs
+        )
+    
+    depth_load = None
+    if hparams.depth_path:
+        print('Load depth:', hparams.depth_path)
+        depth_load = torch.FloatTensor(np.load(hparams.depth_path))
 
     frame_series = []
+    depth_raw_series = []
     depth_series = []
     points_series = []
     normal_series = []
@@ -141,6 +177,18 @@ def render_for_test(hparams, split='test'):
             render_kwargs['exp_step_factor'] = 1/256
         if hparams.embed_a:
             render_kwargs['embedding_a'] = embedding_a
+        if hparams.simulate:
+            render_kwargs['simulator'] = simulator
+            render_kwargs['simulate_effect'] = hparams.simulate
+        if depth_load is not None:
+            d = depth_load[img_idx]
+            d = guided_filter(d, d, hparams.gf_r, hparams.gf_eps)
+            if hparams.anti_aliasing_factor > 1:
+                a = hparams.anti_aliasing_factor
+                size = (int(a*h), int(a*w))
+                d = F.interpolate(d[None, None], size=size)[0, 0]
+            d = d.flatten().cuda()
+            render_kwargs['depth_smooth'] = d
 
         rays_o = rays[:, :3]
         rays_d = rays[:, 3:6]
@@ -168,6 +216,7 @@ def render_for_test(hparams, split='test'):
             semantic_series.append(sem_frame)
         if hparams.render_depth:
             depth_raw = rearrange(results['depth'].cpu().numpy(), '(h w) -> h w', h=h)
+            depth_raw_series.append(depth_raw)
             depth = depth2img(depth_raw, scale=2*hparams.scale)
             depth_series.append(depth)
             cv2.imwrite(os.path.join(frames_dir, '{:0>3d}-depth.png'.format(img_idx)), cv2.cvtColor(depth, cv2.COLOR_RGB2BGR))
@@ -195,6 +244,11 @@ def render_for_test(hparams, split='test'):
         imageio.mimsave(os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}', 'render_traj_depth.mp4' if not hparams.render_train else "circle_path_depth.mp4"),
                         depth_series,
                         fps=30, macro_block_size=1)
+    
+    if hparams.render_depth_raw:
+        depth_raw_all = np.stack(depth_raw_series) #(n_frames, h ,w)
+        path = f'results/{hparams.dataset_name}/{hparams.exp_name}/depth_raw.npy'
+        np.save(path, depth_raw_all)
 
     if hparams.render_points:
         points_all = np.stack(points_series)
