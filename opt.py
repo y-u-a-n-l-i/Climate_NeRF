@@ -8,8 +8,8 @@ def get_opts():
     # common args for all datasets
     parser.add_argument('--root_dir', type=str, required=True,
                         help='root directory of dataset')
-    parser.add_argument('--dataset_name', type=str, default='nerf',
-                        choices=['nerf', 'nsvf', 'colmap', 'nerfpp', 'rtmv', 'tnt', 'kitti', 'mega'],
+    parser.add_argument('--dataset_name', type=str, default='colmap',
+                        choices=['colmap', 'tnt', 'kitti', 'mega'],
                         help='which dataset to train/test')
     parser.add_argument('--split', type=str, default='train',
                         choices=['train', 'trainval'],

@@ -8,12 +8,8 @@ from .kitti360 import KittiDataset
 from .mega_nerf.dataset import MegaDataset
 
 
-dataset_dict = {'nerf': NeRFDataset,
-                'nsvf': NSVFDataset,
-                'colmap': ColmapDataset,
-                'nerfpp': NeRFPPDataset,
+dataset_dict = {'colmap': ColmapDataset,
                 'tnt': tntDataset,
-                'nerfpp': NeRFPPDataset,
                 'kitti': KittiDataset,
                 'mega': MegaDataset
 }
