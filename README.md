@@ -22,25 +22,39 @@ This project is tested on:
 - Install [mmsegmentation](https://mmsegmentation.readthedocs.io/en/latest/get_started.html) and download config and checkpoint files according to their instruction.
     - segmentation model `segformer_mit-b5_8xb1-160k_cityscapes-1024x1024` is recommended.
 - Install remaining dependencies by `pip install -r requirements.txt`
-- Install cuda extension with `pip install models/csrc`, `pip` >= 22.1 is needed.
+- Install cuda extension with `pip install models/csrc`, `pip` >= 22.1 is needed. Recompile CUDA extension after any modifications.
 
 <details>
-    <summary> potential bugs </summary>
+<summary>potential bugs</summary>
 
-    - Bug: when installing `tinycudann`
-    
-    ```
-    ...
-    {PATH_TO}/tiny-cuda-nn/dependencies/json/json.hpp:3954:14: fatal error: filesystem: No such file or directory
-     #include <filesystem>
-              ^~~~~~~~~~~~
-    ```
-
+1. Bug: when installing `tinycudann`
+```
+...
+{PATH_TO}/tiny-cuda-nn/dependencies/json/json.hpp:3954:14: fatal error: filesystem: No such file or directory
+    #include <filesystem>
+            ^~~~~~~~~~~~
+```
+Solution in https://github.com/NVlabs/tiny-cuda-nn/issues/352 is recommended. If CUDA 11.3 is used, gcc-9 will be recommended.
 </details>
 
 ### Dataset
 
+1. TanksAndTemple dataset:
 
+We use the download link from [ARF](https://github.com/Kai-46/ARF-svox2/blob/master/download_data.sh). Download and extract by:
+```
+pip install gdown
+gdown 10Tj-0uh_zIIXf0FZ6vT7_te90VsDnfCU
+unzip TanksAndTempleBG.zip && mv TanksAndTempleBG tnt
+```
+
+2. Kitti-360 dataset:
+
+We use the [download link](https://drive.google.com/file/d/1oJF8e5m4yPrRArn6EPmqXguIl-au2FnT/view?pli=1) from [Panoptic NeRF](https://github.com/fuxiao0719/PanopticNeRF/tree/panopticnerf#data-preparation). We use the same data folder sructure as the one in [Panoptic NeRF](https://github.com/fuxiao0719/PanopticNeRF/tree/panopticnerf#data-preparation).
+
+3. Colmap dataset:
+
+We mainly test our project on garden scene in [mipnerf360 dataset](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip).
 
 ## Acknowledgement
 The code was built on [ngp_pl](https://github.com/kwea123/ngp_pl). Thanks [kwea123](https://github.com/kwea123) for the great project!
