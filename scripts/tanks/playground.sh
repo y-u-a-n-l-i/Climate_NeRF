@@ -34,6 +34,5 @@ python render.py --config configs/Playground.txt --exp_name playground-flood \
     --depth_path results/tnt/playground-no/depth_raw.npy \
     --simulate water --water_height 0.0 --rgb 0.488 0.406 0.32 --refraction_idx 1.35 --gf_r 5 --gf_eps 0.1 \
     --plane_path $DATA_ROOT/plane.npy \
-    --v_forward 1 0 0 --v_down 0 1 0 --v_right 0 0 1 \
     --gl_theta 0.008 --gl_sharpness 500 --wave_len 0.2 --wave_ampl 500000 \
     --anti_aliasing_factor 2 --chunk_size 600000

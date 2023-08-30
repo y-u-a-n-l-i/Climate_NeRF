@@ -112,8 +112,6 @@ def get_opts():
                         help='render normal series')
     parser.add_argument('--render_semantic', action='store_true', default=False,
                         help='render semantic segmentation series')
-    parser.add_argument('--normal_composite', action='store_true', default=False,
-                        help='render normal+rgb composition series')
     parser.add_argument('--render_points', action='store_true', default=False,
                         help='render depth points')
     parser.add_argument('--chunk_size', type=int, default=131072, 

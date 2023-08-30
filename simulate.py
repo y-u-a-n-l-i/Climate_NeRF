@@ -24,7 +24,6 @@ def get_simulator(
     simulator = None
     if effect == 'smog':
         simulator = SmogSimulator(
-            depth_path=kwargs.get('depth_path', None),
             depth_bound=kwargs.get('depth_bound', 0.9),
             sigma=kwargs.get('sigma', 1.0), 
             rgb=kwargs.get('rgb', [1.0, 1.0, 1.0]),
@@ -52,7 +51,6 @@ def get_simulator(
     return simulator 
 class SmogSimulator():
     def __init__(self, 
-        depth_path, 
         depth_bound:float,
         sigma:float,
         rgb:float=[1.0, 1.0, 1.0],
@@ -64,8 +62,6 @@ class SmogSimulator():
             depth_bound: range in (0, 1), simulate smog in depth_bound * depth
 
         '''
-        depth_all = np.load(depth_path)
-        self.depth_all = torch.Tensor(depth_all).to(device)
         self.depth_bound = depth_bound
         self.sigma = sigma
         self.rgb = torch.Tensor(rgb).to(device)
@@ -91,14 +87,27 @@ class SmogSimulator():
             rgb
         '''
         img_idx = sim_kwargs.get('img_idx', 0)
+        model = sim_kwargs.get('model', None)
         rays_o = sim_kwargs.get('rays_o', None)
         rays_d = sim_kwargs.get('rays_d', None)
         hits_t = sim_kwargs.get('hits_t', None)
         opacity = sim_kwargs.get('opacity', None)
         depth = sim_kwargs.get('depth', None)
         rgb = sim_kwargs.get('rgb', None)
+        kwargs = sim_kwargs.get('kwargs', {})
 
-        depth_clear = self.depth_all[img_idx].flatten() #(h*w)
+        n = opacity.size(0)
+        classes = kwargs.get('classes', 7)
+        device = opacity.device
+        opacity_clear = torch.zeros(n, device=device)
+        depth_clear   = torch.zeros(n, device=device)
+        volume_render(
+            model, rays_o, rays_d, hits_t.clone(),
+            opacity_clear, depth_clear, 
+            torch.zeros(n, 3, device=device), torch.zeros(n, 3, device=device), torch.zeros(n, 3, device=device), torch.zeros(n, classes, device=device),
+            **kwargs
+        )
+        depth_clear += (1 - opacity_clear) * depth_clear.max()
         n_pixels = len(depth_clear)
 
         # march rays, update htis
@@ -110,22 +119,16 @@ class SmogSimulator():
         # hits_t[:, 0] = ts
         ts = ts.unsqueeze(-1) #(hw, 1)
         deltas = ts.clone()
-        
-        xyzs = rays_o + rays_d * ts
-        dirs = rays_d.clone()
         N_eff_samples = torch.ones_like(depth_clear).int()
 
         # get sigma~(0, 500), color~(0, 1) 
-        classes = 7
         sigmas  = torch.zeros(n_pixels, device=self.device)
         rgbs    = torch.zeros(n_pixels, 3, device=self.device)
         normals = torch.zeros(n_pixels, 3, device=self.device)
         normals_raw = torch.zeros(n_pixels, 3, device=self.device)
         normal = torch.zeros(n_pixels, 3, device=self.device)
         normal_raw = torch.zeros(n_pixels, 3, device=self.device)
-        up_sems = torch.zeros(n_pixels, device=self.device)
         sems    = torch.zeros(n_pixels, classes, device=self.device)
-        up_sem = torch.zeros(n_pixels, device=self.device)
         sem    = torch.zeros(n_pixels, classes, device=self.device)
 
         alive_indices = torch.arange(n_pixels, device=self.device)
