@@ -61,9 +61,9 @@ We mainly test our project on garden scene in [mipnerf360 dataset](http://storag
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
 
 ## 🌦️Usage
-The configurations of each scene could be adjusted in the config fire in `configs/`, and we provide partial training/rendering/simulation scripts under `scripts/`.
+The configurations of each scene could be adjusted in the config file in `configs/`, and we provide partial training/rendering/simulation scripts under `scripts/`.
 
-In the following we use TanksAndTemple playground scene as example, please edit the paths, experiment names accordingly. You can also run all the following together with `bash scripts/tanks/playground.sh`, and the output images and videos are under `results/`.
+In the following we use TanksAndTemple Playground scene as example, please edit the paths, experiment names accordingly. You can also run all the following together with `bash scripts/tanks/playground.sh`, and the output images and videos are under `results/`.
 
 ### Train
 ```
