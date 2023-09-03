@@ -125,9 +125,10 @@ def render_for_test(hparams, split='test'):
         simulate_kwargs = {
             'depth_bound': hparams.depth_bound,
             'sigma': hparams.sigma,
-            'rgb': hparams.rgb, 
+            'rgb_smog': hparams.rgb_smog, 
             'depth_path': hparams.depth_path,
             # water params
+            'rgb_water': hparams.rgb_water,
             'water_height': hparams.water_height,
             'plane_path': hparams.plane_path,
             'refraction_idx': hparams.refraction_idx,
@@ -148,7 +149,7 @@ def render_for_test(hparams, split='test'):
         )
     
     depth_load = None
-    if hparams.depth_path:
+    if hparams.depth_path and hparams.simulate == 'water':
         print('Load depth:', hparams.depth_path)
         depth_load = torch.FloatTensor(np.load(hparams.depth_path))
 

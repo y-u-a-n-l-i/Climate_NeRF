@@ -12,13 +12,13 @@ render_traj = True
 render_train = False
 
 render_rgb = True
-render_depth = True
+render_depth = False
 
 ### render derived normal or not
-render_normal = True
+render_normal = False
 
 ### render semantic labels or not, set to False if no g.t. semantic labels
-render_semantic = True
+render_semantic = False
 sem_conf_path = ../ckpts/mmseg/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
 sem_ckpt_path = ../ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
 styl_img_path = ./styl_img/autumn.jpg
@@ -32,3 +32,20 @@ embed_msk = True
 
 random_bg = True
 use_skybox = True
+
+## smog
+depth_bound = 0.9
+sigma = 0.5
+rgb_smog = [0.925, 0.906, 0.758] 
+
+## flood
+depth_path = results/tnt/train/depth_raw.npy
+water_height = 0.0
+rgb_water = [0.488, 0.406, 0.32]
+refraction_idx = 1.35
+gf_r = 5
+gf_eps = 0.1
+gl_theta = 0.008
+gl_sharpness = 500
+wave_len = 0.2
+wave_ampl = 500000

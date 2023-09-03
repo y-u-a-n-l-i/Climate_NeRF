@@ -124,8 +124,9 @@ def get_opts():
     # Smog
     parser.add_argument('--depth_bound', type=float, default=0.9)
     parser.add_argument('--sigma', type=float, default=1.0)
-    parser.add_argument('--rgb', nargs='+', type=float, default=[1.0, 1.0, 1.0])
+    parser.add_argument('--rgb_smog', nargs='+', type=float, default=[1.0, 1.0, 1.0])
     # water
+    parser.add_argument('--rgb_water', nargs='+', type=float, default=[1.0, 1.0, 1.0])
     parser.add_argument('--water_height', type=float, default=0.0)
     parser.add_argument('--plane_path', help='path to plane parameters')
     parser.add_argument('--refraction_idx', type=float, default=1.33)

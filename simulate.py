@@ -26,14 +26,14 @@ def get_simulator(
         simulator = SmogSimulator(
             depth_bound=kwargs.get('depth_bound', 0.9),
             sigma=kwargs.get('sigma', 1.0), 
-            rgb=kwargs.get('rgb', [1.0, 1.0, 1.0]),
+            rgb=kwargs.get('rgb_smog', [1.0, 1.0, 1.0]),
             device=device
         )
     elif effect == 'water':
         simulator = WaterSimulator(
             water_height=kwargs.get('water_height', 0.0),
             plane_path=kwargs.get('plane_path', None),
-            color=kwargs.get('rgb', [1.0, 1.0, 1.0]),
+            color=kwargs.get('rgb_water', [1.0, 1.0, 1.0]),
             refraction_idx=kwargs.get('refraction_idx', 1.333),
             pano_path=kwargs.get('pano_path', None),
             v_forward=kwargs.get('v_forward', [1, 0, 0]),
