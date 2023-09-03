@@ -61,13 +61,47 @@ We mainly test our project on garden scene in [mipnerf360 dataset](http://storag
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
 
 ## 🌦️Usage
-### Train
+The configurations of each scene could be adjusted in the config fire in `configs/`, and we provide partial training/rendering/simulation scripts under `scripts/`.
 
+In the following we use TanksAndTemple playground scene as example, please edit the paths, experiment names accordingly. You can also run all the following together with `bash scripts/tanks/playground.sh`, and the output images and videos are under `results/`.
+
+### Train
+```
+DATA_ROOT=/hdd/datasets/TanksAndTempleBG/Playground
+SEM_CONF=/hdd/mmsegmentation/ckpts/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
+SEM_CKPT=/hdd/mmsegmentation/ckpts/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
+
+python train.py --config configs/Playground.txt --exp_name playground \
+    --root_dir $DATA_ROOT --sem_conf_path $SEM_CONF --sem_ckpt_path $SEM_CKPT
+```
 ### Novel View Synthesis
+```
+python render.py --config configs/Playground.txt --exp_name playground \
+    --root_dir $DATA_ROOT --sem_conf_path $SEM_CONF --sem_ckpt_path $SEM_CKPT \
+    --weight_path ckpts/tnt/playground/epoch=79_slim.ckpt \
+    --render_depth_raw
+```
 
 ### 🌫️ Smog Simulation
+```
+python render.py --config configs/Playground.txt --exp_name playground-smog \
+    --root_dir $DATA_ROOT --chunk_size -1 \
+    --weight_path ckpts/tnt/playground/epoch=79_slim.ckpt \
+    --depth_path results/tnt/playground/depth_raw.npy \
+    --simulate smog --depth_bound 0.9 --sigma 0.5 --rgb 0.925 0.906 0.758 
+```
 
 ### 🌊 Flood Simulation
+```
+python render.py --config configs/Playground.txt --exp_name playground-flood \
+    --root_dir $DATA_ROOT \
+    --weight_path ckpts/tnt/playground/epoch=79_slim.ckpt \
+    --depth_path results/tnt/playground/depth_raw.npy \
+    --simulate water --water_height 0.0 --rgb 0.488 0.406 0.32 --refraction_idx 1.35 --gf_r 5 --gf_eps 0.1 \
+    --plane_path $DATA_ROOT/plane.npy \
+    --gl_theta 0.008 --gl_sharpness 500 --wave_len 0.2 --wave_ampl 500000 \
+    --anti_aliasing_factor 2 --chunk_size 600000
+```
 
 ### ❄️ Snow Simulation
 
