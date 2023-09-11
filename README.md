@@ -56,5 +56,8 @@ We use the [download link](https://drive.google.com/file/d/1oJF8e5m4yPrRArn6EPmq
 
 We mainly test our project on garden scene in [mipnerf360 dataset](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip).
 
+## Train
+
+### Scene reconstruction with semantic predictions.
 ## Acknowledgement
 The code was built on [ngp_pl](https://github.com/kwea123/ngp_pl). Thanks [kwea123](https://github.com/kwea123) for the great project!
