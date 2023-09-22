@@ -76,7 +76,7 @@ We mainly test our project on garden scene in [mipnerf360 dataset](http://storag
 
 ### Scene reconstruction with semantic predictions.
 ### Model Parameters
-- You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui).
+<!-- - You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui). -->
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
 
 ## 🌦️Usage
