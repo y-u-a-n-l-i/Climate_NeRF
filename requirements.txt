@@ -1,8 +1,10 @@
 einops
 kornia
-pytorch-lightning
+pytorch-lightning==1.7.7
+torchmetrics==0.11.4
 matplotlib
 opencv-python
+opencv-contrib-python
 lpips
 imageio
 imageio-ffmpeg
@@ -17,3 +19,9 @@ plyfile
 scikit-image
 vedo
 ipdb
+cython==0.29.36
+tensorboard
+open3d
+cupy
+pynvtrc
+pillow==9.5.0

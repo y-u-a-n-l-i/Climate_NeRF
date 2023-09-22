@@ -16,7 +16,7 @@ python render.py --config configs/Playground.txt --exp_name playground \
 python render.py --config configs/Playground.txt --exp_name playground-smog \
     --root_dir $DATA_ROOT \
     --weight_path $CKPT \
-    --simulate smog --chunk_size -1 
+    --simulate smog --chunk_size -1
 
 # Render panorama
 # python render_panorama.py --config configs/Playground.txt --exp_name playground \

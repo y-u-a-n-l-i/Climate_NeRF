@@ -421,3 +421,63 @@ void composite_test_fw_cu(
         );
     }));
 }
+
+template <typename scalar_t>
+__global__ void composite_trans_kernel(
+    const torch::PackedTensorAccessor<scalar_t, 1, torch::RestrictPtrTraits, size_t> sigmas,
+    const torch::PackedTensorAccessor<scalar_t, 1, torch::RestrictPtrTraits, size_t> deltas,
+    const torch::PackedTensorAccessor<scalar_t, 1, torch::RestrictPtrTraits, size_t> ts,
+    const torch::PackedTensorAccessor64<int64_t, 2, torch::RestrictPtrTraits> rays_a,
+    const scalar_t T_threshold,
+    torch::PackedTensorAccessor<scalar_t, 1, torch::RestrictPtrTraits, size_t> t,
+    torch::PackedTensorAccessor<bool, 1, torch::RestrictPtrTraits> mask
+){
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
+    if (n >= rays_a.size(0)) return;
+
+    const int ray_idx = rays_a[n][0], start_idx = rays_a[n][1], N_samples = rays_a[n][2];
+
+    // front to back compositing
+    int samples = 0; scalar_t T = 1.0f;
+
+    while (samples < N_samples) {
+        const int s = start_idx + samples;
+        const scalar_t a = 1.0f - __expf(-sigmas[s]*deltas[s]);
+        const scalar_t w = a * T;
+        t[s] = T;
+        mask[s] = 1;
+        T *= 1.0f-a;
+        if (T <= T_threshold) break; // ray has enough opacity
+        samples++;
+    }
+}
+
+std::vector<torch::Tensor> composite_trans_cu(
+    const torch::Tensor sigmas,
+    const torch::Tensor deltas,
+    const torch::Tensor ts,
+    const torch::Tensor rays_a,
+    const float T_threshold
+){
+    const int N = sigmas.size(0), N_rays = rays_a.size(0);
+
+    auto t = torch::zeros({N}, sigmas.options());
+    auto mask = torch::zeros({N}, torch::dtype(torch::kBool).device(sigmas.device()));
+
+    const int threads = 256, blocks = (N_rays+threads-1)/threads;
+
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(sigmas.type(), "composite_trans_cu", 
+    ([&] {
+        composite_trans_kernel<scalar_t><<<blocks, threads>>>(
+            sigmas.packed_accessor<scalar_t, 1, torch::RestrictPtrTraits, size_t>(),
+            deltas.packed_accessor<scalar_t, 1, torch::RestrictPtrTraits, size_t>(),
+            ts.packed_accessor<scalar_t, 1, torch::RestrictPtrTraits, size_t>(),
+            rays_a.packed_accessor64<int64_t, 2, torch::RestrictPtrTraits>(),
+            T_threshold,
+            t.packed_accessor<scalar_t, 1, torch::RestrictPtrTraits, size_t>(),
+            mask.packed_accessor<bool, 1, torch::RestrictPtrTraits>()
+        );
+    }));
+
+    return {t, mask};
+}

@@ -147,3 +147,5 @@ data
 *.png
 tnt
 360
+pretrained
+run.sh

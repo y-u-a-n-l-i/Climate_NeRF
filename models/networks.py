@@ -4,7 +4,6 @@ from torch import nn
 import torch.nn.functional as F
 import tinycudann as tcnn
 import vren
-from .custom_functions import TruncExp, TruncTanh
 import numpy as np
 from einops import rearrange
 from .rendering import NEAR_DISTANCE
@@ -32,7 +31,7 @@ class NGP(nn.Module):
             torch.zeros(self.cascades*self.grid_size**3//8, dtype=torch.uint8))
 
         # constants
-        L = 16; F = 1; log2_T = 19; N_min = 16
+        L = 16; F = 2; log2_T = 19; N_min = 16
         b = np.exp(np.log(2048*scale/N_min)/(L-1))
         print(f'GridEncoding for spital: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
 
@@ -51,14 +50,14 @@ class NGP(nn.Module):
                 })
         
         self.xyz_net = nn.Sequential(
-            nn.Linear(self.xyz_encoder.n_output_dims, 128),
-            nn.Softplus(),
-            nn.Linear(128, 1)
+            nn.Linear(self.xyz_encoder.n_output_dims, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
         )
         self.sigma_act = nn.Softplus()
 
         # constants
-        L_ = 16; F_ = 2; log2_T_ = 19; N_min_ = 16
+        L_ = 32; F_ = 2; log2_T_ = 19; N_min_ = 16
         b_ = np.exp(np.log(2048*scale/N_min_)/(L_-1))
         print(f'GridEncoding for RGB: Nmin={N_min_} b={b_:.5f} F={F_} T=2^{log2_T_} L={L_}')
 
@@ -84,41 +83,33 @@ class NGP(nn.Module):
         
         rgb_input_dim = self.rgb_encoder.n_output_dims + self.dir_encoder.n_output_dims
         print(f'rgb_input_dim: {rgb_input_dim}')
-        self.rgb_net = \
-            tcnn.Network(
-                n_input_dims=rgb_input_dim+embed_a_len if embed_a else rgb_input_dim,
-                n_output_dims=3,
-                network_config={
-                    "otype": "CutlassMLP",
-                    "activation": "ReLU",
-                    "output_activation": rgb_act,
-                    "n_neurons": 128,
-                    "n_hidden_layers": 1,
-                }
-            )
-                
-        self.norm_pred_header = tcnn.Network(
-                    n_input_dims=self.rgb_encoder.n_output_dims, n_output_dims=3,
-                    network_config={
-                        "otype": "CutlassMLP",
-                        "activation": "ReLU",
-                        "output_activation": "None",
-                        "n_neurons": 32,
-                        "n_hidden_layers": 1,
-                    }
-                )
-        # self.norm_pred_act = nn.Tanh()
 
-        self.semantic_header = tcnn.Network(
-                    n_input_dims=self.rgb_encoder.n_output_dims, n_output_dims=classes,
-                    network_config={
-                        "otype": "CutlassMLP",
-                        "activation": "ReLU",
-                        "output_activation": "None",
-                        "n_neurons": 32,
-                        "n_hidden_layers": 1,
-                    }
-                )
+        self.rgb_net = nn.Sequential(
+                nn.Linear(rgb_input_dim+embed_a_len if embed_a else rgb_input_dim, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 3),
+                nn.Sigmoid()
+            )
+        
+        self.norm_pred_header = nn.Sequential(
+                nn.Linear(self.rgb_encoder.n_output_dims, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, 3)
+            )
+
+        # self.norm_pred_act = nn.Tanh()
+        # constants                
+        self.semantic_header = nn.Sequential(
+                nn.Linear(self.rgb_encoder.n_output_dims, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, classes)
+            )
         self.semantic_act = nn.Softmax(dim=-1)
             
         if use_skybox:
@@ -145,21 +136,6 @@ class NGP(nn.Module):
                     }
                 )
             
-        if self.rgb_act == 'None': # rgb_net output is log-radiance
-            for i in range(3): # independent tonemappers for r,g,b
-                tonemapper_net = \
-                    tcnn.Network(
-                        n_input_dims=1, n_output_dims=1,
-                        network_config={
-                            "otype": "CutlassMLP",
-                            "activation": "ReLU",
-                            "output_activation": "Sigmoid",
-                            "n_neurons": 64,
-                            "n_hidden_layers": 1,
-                        }
-                    )
-                setattr(self, f'tonemapper_net_{i}', tonemapper_net)
-
     def density(self, x, return_feat=False, grad=True, grad_feat=True):
         """
         Inputs:
@@ -171,14 +147,16 @@ class NGP(nn.Module):
         """
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
 
-        with torch.set_grad_enabled(grad):
-            h = self.xyz_encoder(x)
-            h = self.xyz_net(h)
-            sigmas = self.sigma_act(h[:, 0])
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            with torch.set_grad_enabled(grad):
+                h = self.xyz_encoder(x)
+                h = self.xyz_net(h)
+                sigmas = self.sigma_act(h[:, 0]-1)
         if return_feat: 
-            with torch.set_grad_enabled(grad_feat):
-                feat_rgb = self.rgb_encoder(x)
-                return sigmas, feat_rgb
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+                with torch.set_grad_enabled(grad_feat):
+                    feat_rgb = self.rgb_encoder(x)
+            return sigmas, feat_rgb
         return sigmas
 
     @torch.enable_grad()
@@ -189,7 +167,8 @@ class NGP(nn.Module):
                 outputs=sigmas,
                 inputs=x,
                 grad_outputs=torch.ones_like(sigmas, requires_grad=False).cuda(),
-                retain_graph=True
+                retain_graph=True,
+                # create_graph=True
                 )[0]
         return sigmas, feat_rgb, grads
     
@@ -234,12 +213,6 @@ class NGP(nn.Module):
             rgbs = self.rgb_net(torch.cat([d, feat_rgb, kwargs['embedding_a']], 1))
         else:
             rgbs = self.rgb_net(torch.cat([d, feat_rgb], 1))
-        
-        if self.rgb_act == 'None': # rgbs is log-radiance
-            if kwargs.get('output_radiance', False): # output HDR map
-                rgbs = TruncExp.apply(rgbs)
-            else: # convert to LDR using tonemapper networks
-                rgbs = self.log_radiance_to_rgb(rgbs, **kwargs)
             
         return sigmas, rgbs, normals_raw, normals_pred, semantic, cnt
     
@@ -276,13 +249,6 @@ class NGP(nn.Module):
                 rgbs = self.rgb_net(torch.cat([d, feat_rgb, kwargs['embedding_a']], 1))
             else:
                 rgbs = self.rgb_net(torch.cat([d, feat_rgb], 1))
-            
-
-        if self.rgb_act == 'None': # rgbs is log-radiance
-            if kwargs.get('output_radiance', False): # output HDR map
-                rgbs = TruncExp.apply(rgbs)
-            else: # convert to LDR using tonemapper networks
-                rgbs = self.log_radiance_to_rgb(rgbs, **kwargs)
             
         return sigmas, rgbs, normals_pred, semantic
     

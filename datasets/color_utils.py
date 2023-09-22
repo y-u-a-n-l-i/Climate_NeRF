@@ -1,8 +1,12 @@
 import cv2
 from einops import rearrange
 import imageio
+from PIL import Image
 import numpy as np
-
+import torch
+from torchvision import transforms
+from .shadow_tools.MTMT.networks.MTMT import build_model
+from .shadow_tools.MTMT.utils.util import crf_refine
 
 def srgb_to_linear(img):
     limit = 0.04045
@@ -70,3 +74,32 @@ def read_semantic(sem_path, sem_wh, classes=7):
     
     # import ipdb; ipdb.set_trace()
     return label
+
+class Shadow_predictor:
+    def __init__(self, ckpt_path):
+        self.net = build_model('resnext101').cuda()
+        self.net.load_state_dict(torch.load(ckpt_path))
+        print("init shadow predictor from {}".format(ckpt_path))
+        self.net.eval()
+        normal = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        self.trans_scale = 416
+        self.img_transform = transforms.Compose([
+            transforms.Resize((self.trans_scale, self.trans_scale)),
+            transforms.ToTensor(),
+            normal
+        ])
+        self.to_pil = transforms.ToPILImage()
+
+    def predict(self, img_path):
+        img = Image.open(img_path).convert('RGB')
+        w, h = img.size
+        img_var = self.img_transform(img).unsqueeze(0).cuda()
+        _, _, _, up_shadow_final = self.net(img_var)
+        res = torch.sigmoid(up_shadow_final[-1])
+        prediction = np.array(transforms.Resize((h, w))(self.to_pil(res.data.squeeze(0).cpu())))
+        prediction = crf_refine(np.array(img.convert('RGB')), prediction)
+        prediction = np.array(self.to_pil(res.data.squeeze(0).cpu()))
+        prediction = crf_refine(np.array(img.convert('RGB').resize((self.trans_scale, self.trans_scale))), prediction)
+        prediction = np.array(transforms.Resize((h, w))(Image.fromarray(prediction.astype('uint8')).convert('L')))
+
+        return rearrange(torch.FloatTensor(prediction>=(255/2)), 'h w -> (h w)')

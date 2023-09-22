@@ -40,6 +40,9 @@ class BaseDataset(Dataset):
             if hasattr(self, 'labels'):
                 labels = self.labels[img_idxs, pix_idxs]
                 sample['label'] = labels
+            if hasattr(self, 'shadows'):
+                shadows = self.shadows[img_idxs, pix_idxs]
+                sample['shadow'] = shadows
             if hasattr(self, 'depths_2d'):
                 depth = self.depths_2d[img_idxs, pix_idxs]
                 sample['depth'] = depth

@@ -77,7 +77,7 @@ class RayMarcher(torch.autograd.Function):
         ts: (N) sample ts
     """
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, rays_o, rays_d, hits_t,
                 density_bitfield, cascades, scale, exp_step_factor,
                 grid_size, max_samples):
@@ -102,7 +102,7 @@ class RayMarcher(torch.autograd.Function):
         return rays_a, xyzs, dirs, deltas, ts, total_samples
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_drays_a, dL_dxyzs, dL_ddirs,
                  dL_ddeltas, dL_dts, dL_dtotal_samples):
         rays_a, ts = ctx.saved_tensors
@@ -136,7 +136,7 @@ class VolumeRenderer(torch.autograd.Function):
         rgb: (N_rays, 3)
     """
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, sigmas, rgbs, normals_pred, sems, deltas, ts, rays_a, T_threshold, classes):
         total_samples, opacity, depth, rgb, normal_pred, sem, ws = \
             vren.composite_train_fw(sigmas, rgbs, normals_pred, sems, deltas, ts,
@@ -148,7 +148,7 @@ class VolumeRenderer(torch.autograd.Function):
         return total_samples.sum(), opacity, depth, rgb, normal_pred, sem, ws
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_dtotal_samples, dL_dopacity, dL_ddepth, dL_drgb, dL_dnormal_pred, dL_dsem, dL_dws):
         sigmas, rgbs, normals_pred, deltas, ts, rays_a, \
         opacity, depth, rgb, normal_pred, ws = ctx.saved_tensors
@@ -164,7 +164,7 @@ class VolumeRenderer(torch.autograd.Function):
 
 class RefLoss(torch.autograd.Function):
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, sigmas, normals_diff, normals_ori, deltas, ts, rays_a, T_threshold):
         loss_o, loss_p = \
             vren.composite_refloss_fw(sigmas, normals_diff, normals_ori, deltas, ts,
@@ -175,7 +175,7 @@ class RefLoss(torch.autograd.Function):
         return loss_o, loss_p
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_dloss_o, dL_dloss_p):
         
         sigmas, normals_diff, normals_ori, deltas, ts, rays_a, \
@@ -195,24 +195,24 @@ class RefLoss(torch.autograd.Function):
         # global_var.set_value('log_dL_dsigmas', dL_dsigmas)
         # global_var.set_value('log_dL_dnormals_diff', dL_dnormals_diff)
         # global_var.set_value('log_dL_dnormals_ori', dL_dnormals_ori)
-        return None, dL_dnormals_diff, dL_dnormals_ori, None, None, None, None
+        return dL_dsigmas, dL_dnormals_diff, dL_dnormals_ori, None, None, None, None
 
 class TruncExp(torch.autograd.Function):
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x):
         ctx.save_for_backward(x)
         return torch.exp(x)
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_dout):
         x = ctx.saved_tensors[0]
-        return dL_dout * torch.exp(x.clamp(-7, 7))
+        return dL_dout * torch.exp(x.clamp(-10, 10))
     
 class ReLU(torch.autograd.Function):
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x):
         res = torch.zeros_like(x).cuda()
         mask = x>0
@@ -221,7 +221,7 @@ class ReLU(torch.autograd.Function):
         return res
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_dout):
         x, mask = ctx.saved_tensors
         dL_dx = torch.zeros_like(x).cuda()+1e-6
@@ -230,14 +230,14 @@ class ReLU(torch.autograd.Function):
 
 class TruncTanh(torch.autograd.Function):
     @staticmethod
-    # @custom_fwd(cast_inputs=torch.float32)
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x):
         ctx.save_for_backward(x)
         func = torch.nn.Tanh()
         return func(x)
 
     @staticmethod
-    # @custom_bwd
+    @custom_bwd
     def backward(ctx, dL_dout):
         x = ctx.saved_tensors[0]
         func = torch.nn.Tanh()

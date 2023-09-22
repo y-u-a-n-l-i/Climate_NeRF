@@ -63,7 +63,7 @@ def sample_panorama(
 def render_panorama(hparams):
     dir_out = os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}')
     os.makedirs(dir_out, exist_ok=True)
-    rgb_act = 'None' if hparams.use_exposure else 'Sigmoid'
+    rgb_act = 'Sigmoid'
     model = NGP(scale=hparams.scale, rgb_act=rgb_act, use_skybox=hparams.use_skybox, embed_a=hparams.embed_a, embed_a_len=hparams.embed_a_len).cuda()
     ckpt_path = hparams.weight_path
 

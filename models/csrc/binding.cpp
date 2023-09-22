@@ -118,6 +118,21 @@ std::vector<torch::Tensor> composite_alpha_fw(
     return composite_alpha_fw_cu(sigmas, deltas, rays_a, opacity_threshold);
 }
 
+std::vector<torch::Tensor> composite_trans(
+    const torch::Tensor sigmas,
+    const torch::Tensor deltas,
+    const torch::Tensor ts,
+    const torch::Tensor rays_a,
+    const float opacity_threshold
+){
+    CHECK_INPUT(sigmas);
+    CHECK_INPUT(deltas);
+    CHECK_INPUT(ts);
+    CHECK_INPUT(rays_a);
+
+    return composite_trans_cu(sigmas, deltas, ts, rays_a, opacity_threshold);
+}
+
 std::vector<torch::Tensor> composite_train_fw(
     const torch::Tensor sigmas,
     const torch::Tensor rgbs,
@@ -336,6 +351,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
     m.def("composite_refloss_fw", &composite_refloss_fw);
     m.def("composite_refloss_bw", &composite_refloss_bw);
     m.def("composite_test_fw", &composite_test_fw);
+    m.def("composite_trans", &composite_trans);
 
     m.def("distortion_loss_fw", &distortion_loss_fw);
     m.def("distortion_loss_bw", &distortion_loss_bw);

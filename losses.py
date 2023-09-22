@@ -72,13 +72,13 @@ class NeRFLoss(nn.Module):
         super().__init__()
 
         self.lambda_opa = 2e-4
-        self.lambda_distortion = 3e-4 # default
+        self.lambda_distortion = 1e-3 # default
         # self.lambda_distortion = 1e-4 # for meganerf
         self.lambda_depth_mono = 1
         self.lambda_normal_mono = 1e-4
         self.lambda_sky = 1e-1
-        self.lambda_semantic = 4e-2
-        self.lambda_normal_rp = 7e-4
+        self.lambda_semantic = 1e-2
+        self.lambda_normal_rp = 1e-3
         
         self.Annealing = ExponentialAnnealingWeight(max = 1, min = 6e-2, k = 1e-3)
         
@@ -100,6 +100,7 @@ class NeRFLoss(nn.Module):
         
             if kwargs.get('normal_p', False):
                 d['Rp'] = self.lambda_normal_rp * (results['Rp']-torch.zeros_like(results['Rp']).cuda()) # for ref-nerf model
+                # d['Ro'] = 1e-3 * self.lambda_normal_rp * (results['Ro']) # for ref-nerf model
             
             if self.lambda_distortion > 0:
                 d['distortion'] = self.lambda_distortion * \

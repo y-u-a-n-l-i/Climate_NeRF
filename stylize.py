@@ -21,7 +21,7 @@ from datasets.stylize_tools.utils import Stylizer
 from kornia.utils.grid import create_meshgrid3d
 from models.networks import NGP
 from models.implicit_mask import implicit_mask
-from models.rendering import render, MAX_SAMPLES
+from models.rendering import render
 
 # optimizer, losses
 from torch.optim import Adam
@@ -29,18 +29,12 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from losses import NeRFLoss
 
 # metrics
-from torchmetrics import (
-    PeakSignalNoiseRatio, 
-    StructuralSimilarityIndexMeasure
-)
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics import PeakSignalNoiseRatio
 
 # pytorch-lightning
-from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities.distributed import all_gather_ddp_if_available
 
 from utils import slim_ckpt
 
@@ -59,28 +53,20 @@ def depth2img(depth):
     return depth_img
 
 
-class NeRFSystem(LightningModule):
+class StylizeSystem(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         print('start to stylize')
         self.save_hyperparameters(hparams)
 
-        self.warmup_steps = 256
-        self.update_interval = 16 # the interval to update density grid
-
         self.loss = NeRFLoss()
         self.train_psnr = PeakSignalNoiseRatio(data_range=1)
-        self.val_psnr = PeakSignalNoiseRatio(data_range=1)
-        self.val_ssim = StructuralSimilarityIndexMeasure(data_range=1)
-        if self.hparams.eval_lpips:
-            self.val_lpips = LearnedPerceptualImagePatchSimilarity('vgg')
-            for p in self.val_lpips.net.parameters():
-                p.requires_grad = False
 
-        self.rgb_act = 'None' if self.hparams.use_exposure else 'Sigmoid'
+        self.rgb_act = 'Sigmoid'
         # import ipdb; ipdb.set_trace()
         self.model = NGP(scale=self.hparams.scale, rgb_act=self.rgb_act, use_skybox=hparams.use_skybox, embed_a=hparams.embed_a, embed_a_len=hparams.embed_a_len)
-        assert hparams.ckpt_path is not None
+        assert hparams.weight_path is not None
+        load_ckpt(self.model, self.hparams.weight_path, prefixes_to_ignore=['embedding_a'])
       
         self.N_imgs = 0
         if hparams.dataset_name == 'kitti':
@@ -96,9 +82,11 @@ class NeRFSystem(LightningModule):
             self.N_imgs = len(os.listdir(os.path.join(hparams.root_dir, img_dir_name)))
         if hparams.embed_a:
             self.embedding_a = torch.nn.Embedding(self.N_imgs, hparams.embed_a_len)   
+            load_ckpt(self.embedding_a, self.hparams.weight_path, model_name='embedding_a', prefixes_to_ignore=['model', 'normal_net'])
         
         if hparams.embed_msk:
             self.msk_model = implicit_mask()
+            load_ckpt(self.msk_model, self.hparams.weight_path, model_name='msk_model', prefixes_to_ignore=['embedding_a'])
 
         G = self.model.grid_size
         self.model.register_buffer('density_grid',
@@ -127,40 +115,39 @@ class NeRFSystem(LightningModule):
                 
         kwargs = {'test_time': split!='train',
                   'random_bg': self.hparams.random_bg,
-                  'use_skybox': self.hparams.use_skybox if self.global_step>=self.warmup_steps else False,
+                  'use_skybox': self.hparams.use_skybox,
                   'render_rgb': hparams.render_rgb,
                   'render_depth': hparams.render_depth,
                   'render_normal': hparams.render_normal,
-                  'render_sem': hparams.render_semantic,
+                  'render_semantic': hparams.render_semantic,
                   'img_wh': self.img_wh,
                   'stylize': True
                   }
-        if self.hparams.dataset_name in ['colmap', 'nerfpp', 'tnt']:
+        if self.hparams.dataset_name in ['colmap', 'nerfpp', 'tnt', 'kitti']:
             kwargs['exp_step_factor'] = 1/256
-        if self.hparams.use_exposure:
-            kwargs['exposure'] = batch['exposure']
         if self.hparams.embed_a:
             embedding_a = self.embedding_a(torch.tensor([0]).cuda()).detach().expand_as(embedding_a)
             kwargs['embedding_a'] = embedding_a
 
-        if split == 'train':
-            return render(self.model, rays_o, rays_d, **kwargs)
-        else:
-            chunk_size = 8192
-            all_ret = {}
-            for i in range(0, rays_o.shape[0], chunk_size):
-                ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
-                for k in ret:
-                    if k not in all_ret:
-                        all_ret[k] = []
-                    all_ret[k].append(ret[k])
-            for k in all_ret:
-                if k in ['total_samples']:
-                    continue
-                all_ret[k] = torch.cat(all_ret[k], 0)
-            # all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret and k not in ['total_samples']}
-            all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
-            return all_ret
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            if split == 'train':
+                return render(self.model, rays_o, rays_d, **kwargs)
+            else:
+                chunk_size = 8192
+                all_ret = {}
+                for i in range(0, rays_o.shape[0], chunk_size):
+                    ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
+                    for k in ret:
+                        if k not in all_ret:
+                            all_ret[k] = []
+                        all_ret[k].append(ret[k])
+                for k in all_ret:
+                    if k in ['total_samples']:
+                        continue
+                    all_ret[k] = torch.cat(all_ret[k], 0)
+                # all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret and k not in ['total_samples']}
+                all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
+                return all_ret
 
     def setup(self, stage):
         dataset = dataset_dict[self.hparams.dataset_name]
@@ -197,22 +184,13 @@ class NeRFSystem(LightningModule):
         self.register_buffer('directions', self.train_dataset.directions.to(self.device))
         self.register_buffer('poses', self.train_dataset.poses.to(self.device))
             
-        load_ckpt(self.model, self.hparams.ckpt_path, prefixes_to_ignore=['embedding_a', 'normal_net'])
         net_params = []        
-        if self.hparams.embed_msk:
-            load_ckpt(self.msk_model, self.hparams.ckpt_path, model_name='msk_model', prefixes_to_ignore=['embedding_a', 'normal_net.params'])
+        
         for n, p in self.model.named_parameters():
             net_params += [p] 
-
-        embeda_params = []
-        if self.hparams.embed_a:
-            load_ckpt(self.embedding_a, self.hparams.ckpt_path, model_name='embedding_a', prefixes_to_ignore=['model', 'normal_net'])
-            for n, p in self.embedding_a.named_parameters():
-                embeda_params += [p]
                             
         opts = []
-        self.net_opt = Adam([{'params': net_params}, 
-                        {'params': embeda_params, 'lr': 1e-6}], lr=self.hparams.lr, eps=1e-15)
+        self.net_opt = Adam([{'params': net_params}], lr=self.hparams.lr, eps=1e-15)
             
         opts += [self.net_opt]
         net_sch = CosineAnnealingLR(self.net_opt,
@@ -227,16 +205,10 @@ class NeRFSystem(LightningModule):
                           persistent_workers=True,
                           batch_size=None,
                           pin_memory=True)
-
-    # def val_dataloader(self):
-    #     return DataLoader(self.test_dataset,
-    #                       num_workers=8,
-    #                       batch_size=None,
-    #                       pin_memory=True)
-
+    
     def on_train_start(self):
         self.stylized_rgb = []
-        for i in trange(len(self.train_dataset.poses)):
+        for i in trange(len(self.train_dataset.poses), desc='Stylizing training views'):
             batch = {}
             batch['pose'] = self.train_dataset.poses[i].cuda()
             results = self(batch, split='test')
@@ -250,11 +222,23 @@ class NeRFSystem(LightningModule):
     def training_step(self, batch, batch_nb, *args):
         tensorboard = self.logger.experiment
 
+        if self.hparams.embed_msk:
+            w, h = self.img_wh
+            uv = torch.tensor(batch['uv']).cuda()
+            img_idx = torch.tensor(batch['img_idxs']).cuda()
+            uvi = torch.zeros((uv.shape[0], 3)).cuda()
+            uvi[:, 0] = (uv[:, 0]-h/2) / h
+            uvi[:, 1] = (uv[:, 1]-w/2) / w
+            uvi[:, 2] = (img_idx - self.N_imgs/2) / self.N_imgs
+            mask = self.msk_model(uvi)
+
         results = self(batch, split='train')
         batch['rgb'] = self.stylized_rgb[batch['img_idxs'], batch['pix_idxs']]
 
         loss_kwargs = {'dataset_name': self.hparams.dataset_name,
                        'stylize': True}
+        if self.hparams.embed_msk:
+            loss_kwargs['mask'] = mask
         loss_d = self.loss(results, batch, **loss_kwargs)
 
         loss = sum(lo.mean() for lo in loss_d.values())
@@ -282,9 +266,6 @@ class NeRFSystem(LightningModule):
 
     def on_train_end(self):
         torch.cuda.empty_cache()
-        if not self.hparams.no_save_test:
-            self.val_dir = f'results/{self.hparams.dataset_name}/{self.hparams.exp_name}'
-            os.makedirs(self.val_dir, exist_ok=True)
 
     def get_progress_bar_dict(self):
         # don't show the version number
@@ -297,10 +278,10 @@ if __name__ == '__main__':
     hparams = get_opts()
     if hparams.val_only and (not hparams.ckpt_path):
         raise ValueError('You need to provide a @ckpt_path for validation!')
-    system = NeRFSystem(hparams)
+    system = StylizeSystem(hparams)
 
     ckpt_cb = ModelCheckpoint(dirpath=f'ckpts/{hparams.dataset_name}/{hparams.exp_name}',
-                              filename='{epoch:d}',
+                              filename='stylized',
                               save_weights_only=True,
                               every_n_epochs=hparams.num_epochs,
                               save_on_train_epoch_end=True,
@@ -317,38 +298,12 @@ if __name__ == '__main__':
                       logger=logger,
                       enable_model_summary=False,
                       accelerator='gpu',
-                      devices=hparams.num_gpus,
-                      strategy=DDPPlugin(find_unused_parameters=False)
-                               if hparams.num_gpus>1 else None,
+                      devices=1,
                       num_sanity_val_steps=-1 if hparams.val_only else 0,
                       precision=32)
 
     trainer.fit(system)
 
-    if not hparams.val_only: # save slimmed ckpt for the last epoch
-        ckpt_ = \
-            slim_ckpt(f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/epoch={hparams.num_epochs-1}.ckpt')
-        torch.save(ckpt_, f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/epoch={hparams.num_epochs-1}_slim.ckpt')
-
-    if (not hparams.no_save_test) and \
-       hparams.dataset_name=='nsvf' and \
-       'Synthetic' in hparams.root_dir: # save video
-        imgs = sorted(glob.glob(os.path.join(system.val_dir, '*.png')))
-        imageio.mimsave(os.path.join(system.val_dir, 'rgb.mp4'),
-                        [imageio.imread(img) for img in imgs[::2]],
-                        fps=30, macro_block_size=1)
-        imageio.mimsave(os.path.join(system.val_dir, 'depth.mp4'),
-                        [imageio.imread(img) for img in imgs[1::2]],
-                        fps=30, macro_block_size=1)
-    
-    if not hparams.val_only: # save slimmed ckpt for the last epoch
-        ckpt_ = \
-            slim_ckpt(f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/epoch={hparams.num_epochs-1}.ckpt')
-        torch.save(ckpt_, f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/epoch={hparams.num_epochs-1}_slim.ckpt')
-
-    # if not hparams.render_origin:
-    #     from render_metaball import render_for_test  
-    #     render_for_test(hparams, split='train')
-    # else:
-    #     from render import render_for_test
-    #     render_for_test(hparams, split='train')
+    ckpt_ = \
+        slim_ckpt(f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/stylized.ckpt')
+    torch.save(ckpt_, f'ckpts/{hparams.dataset_name}/{hparams.exp_name}/stylized_slim.ckpt')

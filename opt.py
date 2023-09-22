@@ -24,8 +24,6 @@ def get_opts():
                         help='scene scale (whole scene must lie in [-scale, scale]^3')
     parser.add_argument('--use_skybox', action='store_true', default=False,
                         help='whether to use skybox')
-    parser.add_argument('--use_exposure', action='store_true', default=False,
-                        help='whether to train in HDR-NeRF setting')
     parser.add_argument('--embed_a', action='store_true', default=False,
                         help='whether to use appearance embeddings')
     parser.add_argument('--embed_a_len', type=int, default=4,
@@ -38,8 +36,14 @@ def get_opts():
                         help='path to config file of semantic segmentation model')
     parser.add_argument('--sem_ckpt_path', type=str, default=None,
                         help='path to checkpoint file of semantic segmentation model')
+    parser.add_argument('--shadow_ckpt_path', type=str, default=None,
+                        help='path to checkpoint file of shadow predictor')
     parser.add_argument('--styl_img_path', type=str, default=None,
                         help='path to style image')
+    parser.add_argument('--ground_label', type=int, default=0,
+                        help='label of ground in semantic segmentation')
+    parser.add_argument('--sky_label', type=int, default=4,
+                        help='label of sky in semantic segmentation')
 
     # for kitti 360 dataset
     parser.add_argument('--kitti_scene', type=str, default='seq0_1538-1601',
@@ -69,8 +73,6 @@ def get_opts():
                         ''')
     parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of training epochs')
-    parser.add_argument('--num_gpus', type=int, default=1,
-                        help='number of gpus')
     parser.add_argument('--lr', type=float, default=1e-2,
                         help='learning rate')
     parser.add_argument('--depth_mono', action='store_true', default=False,
@@ -100,6 +102,8 @@ def get_opts():
                         help='pretrained checkpoint to load (including optimizers, etc)')
     parser.add_argument('--weight_path', type=str, default=None,
                         help='pretrained checkpoint to load (excluding optimizers, etc)')
+    parser.add_argument('--weight_path_origin_scene', type=str, default=None,
+                        help='pretrained checkpoint of original scene to load (including optimizers, etc), only used in snow simulations')
     
     # render
     parser.add_argument('--render_rgb', action='store_true', default=False,
@@ -112,6 +116,8 @@ def get_opts():
                         help='render normal series')
     parser.add_argument('--render_semantic', action='store_true', default=False,
                         help='render semantic segmentation series')
+    parser.add_argument('--shadow_hint', action='store_true', default=False,
+                        help='use shadow predictions')
     parser.add_argument('--render_points', action='store_true', default=False,
                         help='render depth points')
     parser.add_argument('--chunk_size', type=int, default=131072, 
@@ -145,5 +151,12 @@ def get_opts():
     parser.add_argument('--gl_theta', type=float, default=0.01)
     parser.add_argument('--gl_sharpness', type=float, default=1000)
     parser.add_argument('--refract_decay', type=float, default=-1)
+    # snow
+    parser.add_argument('--mb_size', type=float, default=0.01,
+                        help='size of largest metaballs.')
+    parser.add_argument('--cal_snow_occ', action='store_true', default=False,
+                        help='calculate snow occlusions')
+    parser.add_argument('--pred_shadow', action='store_true', default=False,
+                        help='predict shadow masks')
     
     return parser.parse_args()

@@ -7,7 +7,7 @@ from einops import rearrange
 from tqdm import tqdm
 
 from .ray_utils import *
-from .color_utils import read_image
+from .color_utils import read_image, Shadow_predictor
 from mmseg.apis import inference_model, init_model
 import mmcv
 from mmseg.utils import get_classes
@@ -35,12 +35,19 @@ class tntDataset(BaseDataset):
             img_dir_name = 'rgb'
         
         img_files = sorted(os.listdir(os.path.join(root_dir, img_dir_name)), key=sort_key)
+        sem_model = None
         if kwargs.get('use_sem', False): 
-            config_file = kwargs.get('sem_conf_path', '~/ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes.py')
-            checkpoint_file = kwargs.get('sem_ckpt_path', '~/ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth')
+            config_file = kwargs.get('sem_conf_path', 'pretrained/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes.py')
+            checkpoint_file = kwargs.get('sem_ckpt_path', 'pretrained/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth')
             palette = 'cityscapes'
+            print(f"Load segmentation model from {checkpoint_file}")
             sem_model = init_model(config_file, checkpoint=checkpoint_file, device='cuda')
             sem_model.CLASSES = get_classes(palette)
+
+        shadow_predictor = None
+        if kwargs.get('use_shadow', False):
+            shadow_predictor = Shadow_predictor(kwargs.get('shadow_ckpt_path', 'pretrained/mtmt/iter_10000.pth'))
+
         if os.path.exists(os.path.join(root_dir, 'depth')):
             depth_dir_name = 'depth'
         
@@ -93,7 +100,7 @@ class tntDataset(BaseDataset):
         # center = c2w_f64[:, :3, 3].mean(axis=0)
         # # radius = np.linalg.norm((c2w_f64[:, :3, 3]-center), axis=0).mean(axis=0)
         # up = -normalize(c2w_f64[:, :3, 1].sum(0))
-        self.up = -normalize(c2w_f64[:,:3,1].mean(0))
+        self.up = -normalize(c2w_f64[:,:3,1].mean(0)).float()
         print(f'up vector: {self.up}')
 ########################################################### scale the scene
         norm_pose_files = sorted(
@@ -183,17 +190,11 @@ class tntDataset(BaseDataset):
         classes = kwargs.get('classes', 7)
         self.imgs = imgs
         if split.startswith('train'):
-            if kwargs.get('use_sem', False): 
-                self.rays, self.labels = self.read_meta('train', imgs, c2w_f64, sem_model)
-            else:
-                self.rays = self.read_meta('train', imgs, c2w_f64)
+            self.read_meta('train', imgs, c2w_f64, sem_model=sem_model, shadow_predictor=shadow_predictor)
             if len(depths)>0:
                 self.depths_2d = self.read_depth(depths)
         else: # val, test
-            if kwargs.get('use_sem', False): 
-                self.rays, self.labels = self.read_meta(split, imgs, c2w_f64, sem_model)
-            else:
-                self.rays = self.read_meta(split, imgs, c2w_f64)
+            self.read_meta(split, imgs, c2w_f64, sem_model=sem_model, shadow_predictor=shadow_predictor)
             if len(depths)>0:
                 self.depths_2d = self.read_depth(depths)
             
@@ -202,18 +203,14 @@ class tntDataset(BaseDataset):
             if kwargs.get('render_normal_mask', False):
                 self.render_normal_rays = self.get_path_rays(render_normal_c2w_f64)
 
-    def read_meta(self, split, imgs, c2w_list, sem_model=None):
+    def read_meta(self, split, imgs, c2w_list, sem_model=None, shadow_predictor=None):
         # rays = {} # {frame_idx: ray tensor}
         rays = []
         labels = []
-        
-        if split == 'train': prefix = '0_'
-        elif split == 'val': prefix = '1_'
-        elif 'Synthetic' in self.root_dir: prefix = '2_'
-        elif split == 'test': prefix = '1_' # test set for real scenes
-        
+        shadows = []
+
         self.poses = []
-        print(f'Loading {len(imgs)} {split} images and doing segmentations...')
+        print(f'Loading {len(imgs)} {split} images...')
         for idx, img_path in enumerate(tqdm(imgs)):
             c2w = np.array(c2w_list[idx][:3])
             self.poses += [c2w]
@@ -234,13 +231,17 @@ class tntDataset(BaseDataset):
                 label[torch.logical_or(label==11, label==12)] = 5
                 label[label>=13] = 6
                 labels += [label]
+            
+            if shadow_predictor is not None:
+                shadows += [shadow_predictor.predict(img_path)]
         
         self.poses = torch.FloatTensor(np.stack(self.poses))
+        self.rays = torch.FloatTensor(np.stack(rays))
         
         if sem_model is not None:
-            return torch.FloatTensor(np.stack(rays)), torch.LongTensor(torch.stack(labels))
-        else:
-            return torch.FloatTensor(np.stack(rays))
+            self.labels = torch.LongTensor(torch.stack(labels))
+        if shadow_predictor is not None:
+            self.shadows = torch.FloatTensor(torch.stack(shadows)).unsqueeze(-1)
     
     def read_depth(self, depths):
         depths_ = []

@@ -6,7 +6,7 @@ import torchvision.transforms as T
 import torch.nn.functional as F
 import plyfile
 import skimage.measure
-from models.networks import NGP, Normal
+from models.networks import NGP
 from opt import get_opts
 from utils import load_ckpt
 
@@ -73,7 +73,7 @@ def convert_samples_to_ply(
 hparams = get_opts()
 
 os.makedirs(os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}'), exist_ok=True)
-rgb_act = 'None' if hparams.use_exposure else 'Sigmoid'
+rgb_act = 'Sigmoid'
 model = NGP(scale=hparams.scale, rgb_act=rgb_act, use_skybox=hparams.use_skybox, embed_a=hparams.embed_a, embed_a_len=hparams.embed_a_len).cuda()
 
 ckpt_path = hparams.ckpt_path
@@ -85,7 +85,7 @@ x_min, x_max = -1, 1
 y_min, y_max = -0.3, 0.15
 z_min, z_max = -1, 1
 
-chunk_size = 128*128*128
+chunk_size = 128*128*32
 
 xyz_min = torch.FloatTensor([[x_min, y_min, z_min]])
 xyz_max = torch.FloatTensor([[x_max, y_max, z_max]])
@@ -101,8 +101,10 @@ density = []
 with torch.no_grad():
     for i in range(0, samples.shape[0], chunk_size):
         samples_ = samples[i:i+chunk_size]
-        tmp = model.density(samples_)
-        density.append(tmp)
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            tmp = model.density(samples_)
+        density.append(tmp.cpu())
+
 density = torch.stack(density, dim=0)
 
 density = density.reshape((dense_xyz.shape[0], dense_xyz.shape[1], dense_xyz.shape[2]))

@@ -8,6 +8,7 @@ import math
 from PIL import Image
 from tqdm import trange
 from models.networks import NGP
+from models.mb_networks import NGP_mb, vis_net
 from models.rendering import render
 from datasets import dataset_dict
 from datasets.ray_utils import get_rays
@@ -54,7 +55,7 @@ def render_chunks(model, rays_o, rays_d, chunk_size, **kwargs):
 
 def render_for_test(hparams, split='test'):
     os.makedirs(os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}'), exist_ok=True)
-    rgb_act = 'None' if hparams.use_exposure else 'Sigmoid'
+    rgb_act = 'Sigmoid'
     if hparams.use_skybox:
         print('render skybox!')
     model = NGP(scale=hparams.scale, rgb_act=rgb_act, use_skybox=hparams.use_skybox, embed_a=hparams.embed_a, embed_a_len=hparams.embed_a_len).cuda()
@@ -147,6 +148,21 @@ def render_for_test(hparams, split='test'):
             device='cuda',
             **simulate_kwargs
         )
+        if hparams.simulate == 'snow':
+            dict_ = torch.load(ckpt_path)
+            up = dict_['up'].cuda()
+            ground_height = dict_['ground_height'].item()
+            R = dict_['R'].cuda()
+            R_inv = dict_['R_inv'].cuda()
+            mb_model = NGP_mb(scale=hparams.scale, up=up, ground_height=ground_height,
+                               R=R, R_inv=R_inv, interval=hparams.mb_size, rgb_act=rgb_act).cuda()
+            import ipdb; ipdb.set_trace()
+            load_ckpt(mb_model, ckpt_path, model_name='mb_model')
+            snow_occ_net = vis_net(scale=hparams.scale).cuda()
+            load_ckpt(snow_occ_net, ckpt_path, model_name='snow_occ_net')
+            if hparams.shadow_hint:
+                sun_vis_net = vis_net(scale=hparams.scale).cuda()
+                load_ckpt(sun_vis_net, ckpt_path, model_name='sun_vis_net')
     
     depth_load = None
     if hparams.depth_path and hparams.simulate == 'water':
@@ -170,11 +186,12 @@ def render_for_test(hparams, split='test'):
             'render_rgb': hparams.render_rgb,
             'render_depth': hparams.render_depth,
             'render_normal': hparams.render_normal,
-            'render_sem': hparams.render_semantic,
+            'render_semantic': hparams.render_semantic,
             'img_wh': dataset.img_wh,
-            'anti_aliasing_factor': hparams.anti_aliasing_factor
+            'anti_aliasing_factor': hparams.anti_aliasing_factor,
+            'snow': hparams.simulate == 'snow'
         }
-        if hparams.dataset_name in ['colmap', 'nerfpp']:
+        if hparams.dataset_name in ['colmap', 'nerfpp', 'tnt', 'kitti']:
             render_kwargs['exp_step_factor'] = 1/256
         if hparams.embed_a:
             render_kwargs['embedding_a'] = embedding_a
@@ -190,15 +207,21 @@ def render_for_test(hparams, split='test'):
                 d = F.interpolate(d[None, None], size=size)[0, 0]
             d = d.flatten().cuda()
             render_kwargs['depth_smooth'] = d
+        if hparams.simulate == 'snow':
+            render_kwargs['mb_model'] = mb_model
+            render_kwargs['snow_occ_net'] = snow_occ_net
+            if hparams.shadow_hint:
+                render_kwargs['sun_vis_net'] = sun_vis_net
 
         rays_o = rays[:, :3]
         rays_d = rays[:, 3:6]
         results = {}
         chunk_size = hparams.chunk_size
-        if chunk_size > 0:
-            results = render_chunks(model, rays_o, rays_d, chunk_size, **render_kwargs)
-        else:
-            results = render(model, rays_o, rays_d, **render_kwargs)
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            if chunk_size > 0:
+                results = render_chunks(model, rays_o, rays_d, chunk_size, **render_kwargs)
+            else:
+                results = render(model, rays_o, rays_d, **render_kwargs)
 
         if hparams.render_rgb:
             rgb_frame = None
@@ -231,7 +254,8 @@ def render_for_test(hparams, split='test'):
             normal_series.append((255*(normal+1)/2).astype(np.uint8))
                         
         torch.cuda.synchronize()
-
+    
+    print(f"saving to results/{hparams.dataset_name}/{hparams.exp_name}")
     if hparams.render_rgb:
         imageio.mimsave(os.path.join(f'results/{hparams.dataset_name}/{hparams.exp_name}', 'render_traj.mp4' if not hparams.render_train else "circle_path.mp4"),
                         frame_series,

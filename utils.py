@@ -27,7 +27,6 @@ def load_ckpt(model, ckpt_path, model_name='model', prefixes_to_ignore=[]):
     model_dict.update(checkpoint_)
     model.load_state_dict(model_dict)
 
-
 def slim_ckpt(ckpt_path, save_poses=False):
     ckpt = torch.load(ckpt_path, map_location='cpu')
     # pop unused parameters

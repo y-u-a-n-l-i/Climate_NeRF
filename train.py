@@ -36,15 +36,12 @@ from torchmetrics import (
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
 # pytorch-lightning
-from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities.distributed import all_gather_ddp_if_available
 
 from utils import slim_ckpt, load_ckpt
 
-# render path
 from tqdm import trange
 from utils import load_ckpt
 from render import render_for_test
@@ -96,7 +93,7 @@ class NeRFSystem(LightningModule):
             for p in self.val_lpips.net.parameters():
                 p.requires_grad = False
                         
-        rgb_act = 'None' if self.hparams.use_exposure else 'Sigmoid'
+        rgb_act = 'Sigmoid'
         self.model = NGP(scale=hparams.scale, rgb_act=rgb_act, use_skybox=hparams.use_skybox, embed_a=hparams.embed_a, embed_a_len=hparams.embed_a_len)
         if hparams.embed_msk:
             self.msk_model = implicit_mask()
@@ -147,34 +144,34 @@ class NeRFSystem(LightningModule):
                   'render_rgb': hparams.render_rgb,
                   'render_depth': hparams.render_depth,
                   'render_normal': hparams.render_normal,
-                  'render_sem': hparams.render_semantic,
+                  'render_semantic': hparams.render_semantic,
                   'img_wh': self.img_wh}
         if self.hparams.dataset_name in ['colmap', 'nerfpp', 'tnt', 'kitti']:
             kwargs['exp_step_factor'] = 1/256
-        if self.hparams.use_exposure:
-            kwargs['exposure'] = batch['exposure']
         if self.hparams.embed_a:
             kwargs['embedding_a'] = embedding_a
         
         if split == 'train':
-            return render(self.model, rays_o, rays_d, **kwargs)
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+                res = render(self.model, rays_o, rays_d, **kwargs)
+            return res
         else:
-            chunk_size = self.hparams.chunk_size
-            all_ret = {}
-            for i in range(0, rays_o.shape[0], chunk_size):
-                ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
-                for k in ret:
-                    if k not in all_ret:
-                        all_ret[k] = []
-                    all_ret[k].append(ret[k])
-            for k in all_ret:
-                if k in ['total_samples']:
-                    continue
-                all_ret[k] = torch.cat(all_ret[k], 0)
-            all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+                chunk_size = self.hparams.chunk_size
+                all_ret = {}
+                for i in range(0, rays_o.shape[0], chunk_size):
+                    ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
+                    for k in ret:
+                        if k not in all_ret:
+                            all_ret[k] = []
+                        all_ret[k].append(ret[k])
+                for k in all_ret:
+                    if k in ['total_samples']:
+                        continue
+                    all_ret[k] = torch.cat(all_ret[k], 0)
+                all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
             return all_ret
                 
-
     def setup(self, stage):
         dataset = dataset_dict[self.hparams.dataset_name]
         kwargs = {'root_dir': self.hparams.root_dir,
@@ -278,12 +275,6 @@ class NeRFSystem(LightningModule):
         if self.hparams.embed_msk:
             loss_kwargs['mask'] = mask
         loss_d = self.loss(results, batch, **loss_kwargs)
-        if self.hparams.use_exposure:
-            zero_radiance = torch.zeros(1, 3, device=self.device)
-            unit_exposure_rgb = self.model.log_radiance_to_rgb(zero_radiance,
-                                    **{'exposure': torch.ones(1, 1, device=self.device)})
-            loss_d['unit_exposure'] = \
-                0.5*(unit_exposure_rgb-self.train_dataset.unit_exposure_rgb)**2
         loss = sum(lo.mean() for lo in loss_d.values())
         with torch.no_grad():
             self.train_psnr(results['rgb'], batch['rgb'])
@@ -291,7 +282,7 @@ class NeRFSystem(LightningModule):
         self.log('train/loss', loss)
         self.log('train/s_per_ray', results['total_samples']/len(batch['rgb']), True)
         self.log('train/psnr', self.train_psnr, True)
-        if self.global_step%10000 == 0 and self.global_step>0:
+        if self.global_step%5000 == 0:
             print('[val in training]')
             w, h = self.img_wh
             
@@ -368,18 +359,18 @@ class NeRFSystem(LightningModule):
     
     def validation_epoch_end(self, outputs):
         psnrs = torch.stack([x['psnr'] for x in outputs])
-        mean_psnr = all_gather_ddp_if_available(psnrs).mean()
+        mean_psnr = psnrs.mean()
         print(f'test/mean_PSNR: {mean_psnr}')
         self.log('test/psnr', mean_psnr)
 
         ssims = torch.stack([x['ssim'] for x in outputs])
-        mean_ssim = all_gather_ddp_if_available(ssims).mean()
+        mean_ssim = ssims.mean()
         print(f'test/mean_SSIM: {mean_ssim}')
         self.log('test/ssim', mean_ssim)
 
         if self.hparams.eval_lpips:
             lpipss = torch.stack([x['lpips'] for x in outputs])
-            mean_lpips = all_gather_ddp_if_available(lpipss).mean()
+            mean_lpips = lpipss.mean()
             print(f'test/mean_LPIPS: {mean_lpips}')
             self.log('test/lpips_vgg', mean_lpips)
 
@@ -418,9 +409,7 @@ if __name__ == '__main__':
                       logger=logger,
                       enable_model_summary=False,
                       accelerator='gpu',
-                      devices=hparams.num_gpus,
-                      strategy=DDPPlugin(find_unused_parameters=False)
-                               if hparams.num_gpus>1 else None,
+                      devices=1,
                       num_sanity_val_steps=-1 if hparams.val_only else 0,
                       precision=32,
                       gradient_clip_val=50)

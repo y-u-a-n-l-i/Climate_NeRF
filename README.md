@@ -15,12 +15,15 @@ This project is tested on:
 ## 🌦️ Setup
 
 ### Environment
+- First clone this repository `git clone --recursive https://github.com/y-u-a-n-l-i/Climate_NeRF.git`
 - Create and activate environment by `conda create -n climatenerf python=3.8` and `conda activate climatenerf`.
 - Install torch and torchvision by `pip install torch==1.11.0 torchvision==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu113`
 - Install `torch-scatter` by `pip install torch-scatter -f https://data.pyg.org/whl/torch-1.11.0+cu113.html`
 - Install [PyTorch extension](https://github.com/NVlabs/tiny-cuda-nn#pytorch-extension) from `tinycudann`.
 - Install [mmsegmentation](https://mmsegmentation.readthedocs.io/en/latest/get_started.html) and download config and checkpoint files according to their instruction.
     - segmentation model `segformer_mit-b5_8xb1-160k_cityscapes-1024x1024` is recommended.
+- Install dependences of shadow predictor [MTMT](https://github.com/eraserNut/MTMT) by `pip3 install --no-build-isolation git+https://github.com/lucasb-eyer/pydensecrf.git`.
+    - Download checkpoint of [MTMT](https://github.com/eraserNut/MTMT) from official repo.
 - Install remaining dependencies by `pip install -r requirements.txt`
 - Install cuda extension with `pip install models/csrc`, `pip` >= 22.1 is needed. Recompile CUDA extension after any modifications.
 
@@ -35,6 +38,19 @@ This project is tested on:
             ^~~~~~~~~~~~
 ```
 Solution in https://github.com/NVlabs/tiny-cuda-nn/issues/352 is recommended. If CUDA 11.3 is used, gcc-9 will be recommended.
+
+2. Bug: when installing `pydensecrf`
+
+```
+'MatrixXf' is not a type identifier
+```
+Solution in https://github.com/lucasb-eyer/pydensecrf/issues/123#issuecomment-1644856641 is recommended.
+
+3. Bug: when using shadow predictor:
+```
+No such file or directory: '/media/data/chenzhihao/code/MTMT/backbone_pth/resnext_101_32x4d.pth'
+```
+Download resnext model from this [link](https://drive.google.com/file/d/1dnH-IHwmu9xFPlyndqI6MfF4LvH6JKNQ/view) provided by [MTMT](https://github.com/eraserNut/MTMT) and changing `resnext_101_32_path` in `datasets/shadow_tools/MTMT/networks/resnext/config.py` into where you put resnext's checkpoint.
 </details>
 
 ### Dataset
@@ -56,11 +72,9 @@ We use the [download link](https://drive.google.com/file/d/1oJF8e5m4yPrRArn6EPmq
 
 We mainly test our project on garden scene in [mipnerf360 dataset](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip).
 
-<<<<<<< HEAD
 ## Train
 
 ### Scene reconstruction with semantic predictions.
-=======
 ### Model Parameters
 - You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui).
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
@@ -109,6 +123,5 @@ python render.py --config configs/Playground.txt --exp_name playground-flood \
 
 
 
->>>>>>> c80579085c88d40ca728aa86f906bcc949055962
 ## Acknowledgement
 The code was built on [ngp_pl](https://github.com/kwea123/ngp_pl). Thanks [kwea123](https://github.com/kwea123) for the great project!

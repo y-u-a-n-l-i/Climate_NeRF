@@ -83,6 +83,13 @@ std::vector<torch::Tensor> composite_train_fw_cu(
     const int classes
 );
 
+std::vector<torch::Tensor> composite_trans_cu(
+    const torch::Tensor sigmas,
+    const torch::Tensor deltas,
+    const torch::Tensor ts,
+    const torch::Tensor rays_a,
+    const float T_threshold
+);
 
 std::vector<torch::Tensor> composite_train_bw_cu(
     const torch::Tensor dL_dopacity,
