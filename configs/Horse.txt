@@ -1,6 +1,6 @@
-root_dir = ./tnt/Playground
+root_dir = ./tnt/Horse
 dataset_name = tnt
-exp_name = Playground_test
+exp_name = horse
 batch_size = 2048
 scale = 8.0
 num_epochs = 80
@@ -39,13 +39,13 @@ sigma = 0.5
 rgb_smog = [0.925, 0.906, 0.758] 
 
 ## flood
-depth_path = results/tnt/playground/depth_raw.npy
-water_height = 0.0
+depth_path = results/tnt/horse/depth_raw.npy
+water_height = -0.06
 rgb_water = [0.488, 0.406, 0.32]
 refraction_idx = 1.35
 gf_r = 5
 gf_eps = 0.1
 gl_theta = 0.008
 gl_sharpness = 500
-wave_len = 0.2
-wave_ampl = 500000
+wave_len = 1.0
+wave_ampl = 2000000

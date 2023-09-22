@@ -5,14 +5,14 @@ This is the official repo for PyTorch implementation of paper "ClimateNeRF: Extr
 ### [Paper](https://arxiv.org/abs/2211.13226) | [Project Page](https://climatenerf.github.io/)
 https://github.com/y-u-a-n-l-i/Climate_NeRF/assets/68422992/59efd3e2-1dd2-4ce6-a07b-2d53a6a6c89e
 
-## Prerequisites
+## 🌦️ Prerequisites
 This project is tested on:
 - Ubuntu 18.04.6:
     - CUDA 11.3
 - NVIDIA RTX 3090
 - Python package manager `conda`
 
-## Setup
+## 🌦️ Setup
 
 ### Environment
 - Create and activate environment by `conda create -n climatenerf python=3.8` and `conda activate climatenerf`.
@@ -56,8 +56,59 @@ We use the [download link](https://drive.google.com/file/d/1oJF8e5m4yPrRArn6EPmq
 
 We mainly test our project on garden scene in [mipnerf360 dataset](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip).
 
+<<<<<<< HEAD
 ## Train
 
 ### Scene reconstruction with semantic predictions.
+=======
+### Model Parameters
+- You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui).
+- Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
+
+## 🌦️Usage
+The configuration of each scene could be adjusted in the config files under `configs/`, and we provide partial training/rendering/simulation scripts under `scripts/`.
+
+In the following we use TanksAndTemple Playground scene as example, please edit the paths, experiment names accordingly. You can also run all the following together with `bash scripts/tanks/playground.sh`, and the output images and videos are under `results/`.
+
+### Train
+```
+DATA_ROOT=/hdd/datasets/TanksAndTempleBG/Playground
+SEM_CONF=/hdd/mmsegmentation/ckpts/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
+SEM_CKPT=/hdd/mmsegmentation/ckpts/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
+
+python train.py --config configs/Playground.txt --exp_name playground \
+    --root_dir $DATA_ROOT --sem_conf_path $SEM_CONF --sem_ckpt_path $SEM_CKPT
+```
+### Novel View Synthesis
+```
+python render.py --config configs/Playground.txt --exp_name playground \
+    --root_dir $DATA_ROOT \
+    --weight_path $CKPT \
+    --render_depth --render_depth_raw --render_normal --render_semantic
+```
+
+### 🌫️ Smog Simulation
+```
+python render.py --config configs/Playground.txt --exp_name playground-smog \
+    --root_dir $DATA_ROOT \
+    --weight_path $CKPT \
+    --simulate smog --chunk_size -1 
+```
+
+### 🌊 Flood Simulation
+```
+python render.py --config configs/Playground.txt --exp_name playground-flood \
+    --root_dir $DATA_ROOT \
+    --weight_path $CKPT \
+    --simulate water \
+    --plane_path $DATA_ROOT/plane.npy \
+    --anti_aliasing_factor 2 --chunk_size 600000
+```
+
+### ❄️ Snow Simulation
+
+
+
+>>>>>>> c80579085c88d40ca728aa86f906bcc949055962
 ## Acknowledgement
 The code was built on [ngp_pl](https://github.com/kwea123/ngp_pl). Thanks [kwea123](https://github.com/kwea123) for the great project!

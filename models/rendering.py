@@ -172,12 +172,14 @@ def __render_rays_test(model, rays_o, rays_d, hits_t, **kwargs):
         sim_kwargs = {
             # Smog params
             'img_idx': img_idx,
+            'model': model,
             'rays_o': rays_o,
             'rays_d': rays_d,
             'hits_t': hits_t, 
             'opacity': opacity,
             'depth': depth,
-            'rgb': rgb
+            'rgb': rgb,
+            'kwargs': kwargs
             # Water params
         }
         simulator.simulate_before_marching(**sim_kwargs)
