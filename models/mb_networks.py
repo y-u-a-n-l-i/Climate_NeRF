@@ -225,7 +225,7 @@ class NGP_mb(nn.Module):
 
             if kwargs.get('cal_snow_occ', False):
                 weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
-                snow_occ = weighted_sigmoid(kwargs['snow_occ_net'](x_sf_colmap), 5, 0.6)
+                snow_occ = weighted_sigmoid(kwargs['snow_occ_net'](x_sf_colmap), 10, 0.5)
                 alpha *= snow_occ
 
             rgbs = (rgbs+4)/(1+4) # value can be tuned
@@ -233,7 +233,7 @@ class NGP_mb(nn.Module):
                 shadow = 0.7*(kwargs['sun_vis_net'](x_sf_colmap)<0.5).float() + 0.3 # value can be tuned
                 rgbs *= shadow[:, None]
             
-            center_density = kwargs.get('center_density', 5e3)
+            center_density = kwargs.get('center_density', 2e3)
             density_c = alpha * center_density # (N_samples * mb_cascade * 8)
             density_sample = kernel_function(density_c, x_sf_radius, x_sf_dis) # (N_samples * mb_cascade * 8)
             ddensity_sample_dxsf = dkernel_function(density_c, x_sf_radius, x_sf_dis)[:, None] * x_sf_grad

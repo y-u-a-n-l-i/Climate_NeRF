@@ -68,17 +68,17 @@ class StylizeSystem(LightningModule):
         assert hparams.weight_path is not None
         load_ckpt(self.model, self.hparams.weight_path, prefixes_to_ignore=['embedding_a'])
       
-        self.N_imgs = 0
+        img_dir_name = None
+        if os.path.exists(os.path.join(hparams.root_dir, 'images')):
+            img_dir_name = 'images'
+        elif os.path.exists(os.path.join(hparams.root_dir, 'rgb')):
+            img_dir_name = 'rgb'
+
         if hparams.dataset_name == 'kitti':
             self.N_imgs = 2 * hparams.train_frames
+        elif hparams.dataset_name == 'mega':
+            self.N_imgs = 1920 // 6
         else:
-            if os.path.exists(os.path.join(hparams.root_dir, 'images')):
-                img_dir_name = 'images'
-            elif os.path.exists(os.path.join(hparams.root_dir, 'rgb')):
-                img_dir_name = 'rgb'
-            elif os.path.exists(os.path.join(hparams.root_dir, f'images_{int(1/hparams.downsample)}')):
-                img_dir_name = f'images_{int(1/hparams.downsample)}'
-            
             self.N_imgs = len(os.listdir(os.path.join(hparams.root_dir, img_dir_name)))
         if hparams.embed_a:
             self.embedding_a = torch.nn.Embedding(self.N_imgs, hparams.embed_a_len)   

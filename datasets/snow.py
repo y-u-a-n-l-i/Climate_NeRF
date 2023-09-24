@@ -29,7 +29,7 @@ class SnowSeed(Dataset):
         sample = {}
         rays_idx = np.random.choice(len(self.rays_o), self.batch_size)
         rays_o = self.rays_o[rays_idx]
-        rays_d = self.rays_d.unsqueeze(0).repeat(rays_o.shape[0], 1)
+        rays_d = F.normalize(self.rays_d.unsqueeze(0).repeat(rays_o.shape[0], 1) + 0.05*(2*torch.rand((rays_o.shape[0], 3))-1), dim=-1)
         sample = {'rays_o': rays_o,
                   'rays_d': rays_d}
 
