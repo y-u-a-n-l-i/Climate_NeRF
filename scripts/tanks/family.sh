@@ -25,4 +25,4 @@ python render.py --config configs/Family.txt --exp_name family-flood \
     --weight_path $CKPT \
     --simulate water \
     --plane_path $DATA_ROOT/plane.npy \
-    --anti_aliasing_factor 2  --chunk_size 600000
+    --anti_aliasing_factor 1  --chunk_size 600000
