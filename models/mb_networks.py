@@ -230,10 +230,11 @@ class NGP_mb(nn.Module):
 
             rgbs = (rgbs+4)/(1+4) # value can be tuned
             if kwargs.get('pred_shadow', False):
-                shadow = 0.7*(kwargs['sun_vis_net'](x_sf_colmap)>0.5).float() + 0.3 # value can be tuned
+                shadow = 0.7*(kwargs['sun_vis_net'](x_sf_colmap)<0.5).float() + 0.3 # value can be tuned
                 rgbs *= shadow[:, None]
             
-            density_c = alpha * kwargs.get('center_density', 2e3) # (N_samples * mb_cascade * 8)
+            center_density = kwargs.get('center_density', 5e3)
+            density_c = alpha * center_density # (N_samples * mb_cascade * 8)
             density_sample = kernel_function(density_c, x_sf_radius, x_sf_dis) # (N_samples * mb_cascade * 8)
             ddensity_sample_dxsf = dkernel_function(density_c, x_sf_radius, x_sf_dis)[:, None] * x_sf_grad
             
@@ -247,7 +248,7 @@ class NGP_mb(nn.Module):
             
             weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
             thres_ratio = kwargs.get('mb_thres', 1/8)
-            thres = weighted_sigmoid(sigmas, 50, kwargs.get('center_density', 2e3) * thres_ratio)
+            thres = weighted_sigmoid(sigmas, 50, center_density * thres_ratio)
             sigmas = sigmas * thres
             if density_only:
                 return sigmas 

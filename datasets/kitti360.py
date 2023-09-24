@@ -7,9 +7,6 @@ import copy
 import torch
 from .ray_utils import *
 from .color_utils import *
-from mmseg.apis import inference_model, init_model
-import mmcv
-from mmseg.utils import get_classes
 from .base import BaseDataset
 from tqdm import tqdm
 
@@ -72,7 +69,7 @@ class KittiDataset(BaseDataset):
 
         self.shadow_predictor = None
         if kwargs.get('use_shadow', False):
-            shadow_predictor = Shadow_predictor(kwargs.get('shadow_ckpt_path', 'pretrained/mtmt/iter_10000.pth'))
+            self.shadow_predictor = Shadow_predictor(kwargs.get('shadow_ckpt_path', 'pretrained/mtmt/iter_10000.pth'))
 
         # load intrinsics
         calib_dir = os.path.join(root_dir, 'calibration')

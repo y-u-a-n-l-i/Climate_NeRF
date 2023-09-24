@@ -22,7 +22,6 @@ render_semantic = True
 sem_conf_path = ../ckpts/mmseg/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
 sem_ckpt_path = ../ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
 styl_img_path = ./styl_img/winter.jpg
-shadow_ckpt_path = ../ckpts/mtmt/iter_10000.pth
 
 ### appearance embeddings
 embed_a = True

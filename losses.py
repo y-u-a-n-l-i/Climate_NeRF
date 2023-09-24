@@ -73,7 +73,7 @@ class NeRFLoss(nn.Module):
 
         self.lambda_opa = 2e-4
         self.lambda_distortion = 1e-3 # default
-        # self.lambda_distortion = 1e-4 # for meganerf
+        # self.lambda_distortion = 1e-4 # for meganerf and kitti
         self.lambda_depth_mono = 1
         self.lambda_normal_mono = 1e-4
         self.lambda_sky = 1e-1

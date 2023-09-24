@@ -171,8 +171,9 @@ class SnowSystem(LightningModule):
                 val_list.append(int(i))
             kwargs['center_pose'] = center_pose
             kwargs['val_list'] = val_list
-            kwargs['sequence'] = self.hparams.sequence
-            kwargs['scene_type'] = self.hparams.scene_type
+        if self.hparams.dataset_name == 'mega':
+            kwargs['mega_frame_start'] = self.hparams.mega_frame_start
+            kwargs['mega_frame_end'] = self.hparams.mega_frame_end
         self.train_dataset = dataset(split=self.hparams.split, **kwargs)
         self.train_dataset.batch_size = self.hparams.batch_size
         self.train_dataset.ray_sampling_strategy = self.hparams.ray_sampling_strategy

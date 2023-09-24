@@ -156,9 +156,6 @@ def render_for_test(hparams, split='test'):
             R_inv = dict_['R_inv'].cuda()
             mb_model = NGP_mb(scale=hparams.scale, up=up, ground_height=ground_height,
                                R=R, R_inv=R_inv, interval=hparams.mb_size, rgb_act=rgb_act).cuda()
-            # for _ in trange(50, desc='updating occ grids'):
-            #     with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            #         model.update_density_grid(0.01*MAX_SAMPLES/3**0.5, warmup=True, aux_model=mb_model)
             load_ckpt(mb_model, ckpt_path, model_name='mb_model')
             snow_occ_net = vis_net(scale=hparams.scale).cuda()
             load_ckpt(snow_occ_net, ckpt_path, model_name='snow_occ_net')
