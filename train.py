@@ -116,12 +116,6 @@ class NeRFSystem(LightningModule):
             self.embedding_a = torch.nn.Embedding(self.N_imgs, hparams.embed_a_len) 
         ###
         
-        G = self.model.grid_size
-        self.model.register_buffer('density_grid',
-            torch.zeros(self.model.cascades, G**3))
-        self.model.register_buffer('grid_coords',
-            create_meshgrid3d(G, G, G, False, dtype=torch.int32).reshape(-1, 3))
-
     def forward(self, batch, split):
         
         if split=='train':
@@ -250,7 +244,7 @@ class NeRFSystem(LightningModule):
         if self.global_step%self.update_interval == 0:
             self.model.update_density_grid(0.01*MAX_SAMPLES/3**0.5,
                                         warmup=self.global_step<self.warmup_steps,
-                                        erode=self.hparams.dataset_name=='colmap')
+                                        erode=self.hparams.dataset_name in 'colmap')
 
         # with autograd.detect_anomaly():
         results = self(batch, split='train')

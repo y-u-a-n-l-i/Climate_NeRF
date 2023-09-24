@@ -87,13 +87,7 @@ class StylizeSystem(LightningModule):
         if hparams.embed_msk:
             self.msk_model = implicit_mask()
             load_ckpt(self.msk_model, self.hparams.weight_path, model_name='msk_model', prefixes_to_ignore=['embedding_a'])
-
-        G = self.model.grid_size
-        self.model.register_buffer('density_grid',
-            torch.zeros(self.model.cascades, G**3))
-        self.model.register_buffer('grid_coords',
-            create_meshgrid3d(G, G, G, False, dtype=torch.int32).reshape(-1, 3))
-        
+                    
         self.frame_series = []
 
         self.stylizer = Stylizer(hparams.styl_img_path, hparams)

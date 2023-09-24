@@ -97,12 +97,6 @@ class SnowSystem(LightningModule):
             load_ckpt(self.embedding_a, self.hparams.weight_path, model_name='embedding_a', prefixes_to_ignore=['model'])
         ###
         
-        G = self.model.grid_size
-        self.model.register_buffer('density_grid',
-            torch.zeros(self.model.cascades, G**3))
-        self.model.register_buffer('grid_coords',
-            create_meshgrid3d(G, G, G, False, dtype=torch.int32).reshape(-1, 3))
-        
         self.samples_points = []
         self.samples_color = []
         self.cam_o = []
@@ -225,7 +219,7 @@ class SnowSystem(LightningModule):
                     net_params += [p]
         
         opts = []
-        self.net_opt = Adam(net_params, lr=1e-3, eps=1e-15)
+        self.net_opt = Adam(net_params, lr=1e-2, eps=1e-15)
         opts = [self.net_opt] 
 
         return opts
@@ -257,14 +251,15 @@ class SnowSystem(LightningModule):
         loss_items.append(loss_snow_occ)
         if self.hparams.shadow_hint:
             loss_pred_shadow = F.binary_cross_entropy(results['pred_shadow'], batch_['shadow'], reduction='mean')
-        loss_items.append(loss_pred_shadow)
+            loss_items.append(loss_pred_shadow)
 
         loss = sum(loss_items)
         self.log('lr', self.net_opt.param_groups[0]['lr'])
         self.log('train/loss', loss)
         self.log('train/loss_snow_alpha', loss_snow_alpha, True)
         self.log('train/loss_snow_occ', loss_snow_occ, True)
-        self.log('train/loss_pred_shadow', loss_pred_shadow, True)
+        if self.hparams.shadow_hint:
+            self.log('train/loss_pred_shadow', loss_pred_shadow, True)
         return loss
 
     def on_train_end(self):

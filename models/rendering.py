@@ -1,10 +1,12 @@
 from logging.config import valid_ident
+import numpy as np
 import torch
 import torch.nn.functional as F
 from .custom_functions import \
     RayAABBIntersector, RayMarcher, RefLoss, VolumeRenderer
 from einops import rearrange
 import vren
+import trimesh
 
 MAX_SAMPLES = 1024
 NEAR_DISTANCE = 0.01
@@ -38,7 +40,7 @@ def render(model, rays_o, rays_d, **kwargs):
     _, hits_t, _ = \
         RayAABBIntersector.apply(rays_o, rays_d, model.center, model.half_size, 1)
     hits_t[(hits_t[:, 0, 0]>=0)&(hits_t[:, 0, 0]<NEAR_DISTANCE), 0, 0] = NEAR_DISTANCE
-    if kwargs.get('cal_snow_occ', False):
+    if kwargs.get('cal_snow_occ', False) and not kwargs['test_time']:
         _, sky_hits_t, _ = RayAABBIntersector.apply(kwargs['sky_rays_o'].contiguous(), kwargs['sky_rays_d'].contiguous(), \
                                                      model.center, model.half_size, 1)
         kwargs['sky_hits_t'] = sky_hits_t
@@ -123,13 +125,11 @@ def volume_render(
         _sigmas, _rgbs, _normals_pred, _sems = model.forward_test(xyzs[valid_mask], dirs[valid_mask], **kwargs)
 
         if kwargs.get("snow", False):
-            weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
-            _sigmas_mb, _rgbs_mb, _normals_mb = kwargs['mb_model'].forward_test(xyzs[valid_mask], **kwargs)
-            import ipdb; ipdb.set_trace()
+            _sigmas_mb, _rgbs_mb, _normals_mb = kwargs['mb_model'].forward_test(xyzs[valid_mask], geometry_model=model, **kwargs)
             _rgbs_mb = linear_to_srgb(_rgbs_mb.float())
-            thres_ratio = kwargs.get('mb_thres', 1/12)
-            thres = weighted_sigmoid(_sigmas_mb, 50, kwargs.get('center_density', 5e3) * thres_ratio).detach()
-            _sigmas_mb = _sigmas_mb * thres
+            # thres_ratio = kwargs.get('mb_thres', 1/8)
+            # thres = weighted_sigmoid(_sigmas_mb, 50, kwargs.get('center_density', 2e3) * thres_ratio).detach()
+            # _sigmas_mb = _sigmas_mb * thres
             _rgbs = torch.clamp((_rgbs * _sigmas[:, None] + _rgbs_mb * _sigmas_mb[:, None]) / (_sigmas[:, None] + _sigmas_mb[:, None] + 1e-9), max=1.)
             _sigmas = _sigmas + _sigmas_mb
        
@@ -325,11 +325,11 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
     if kwargs.get('make_snow', False):
         with torch.no_grad():
             _, _, normals_pred_origin, semantics_origin = kwargs['origin_model'].forward_test(xyzs, dirs, **kwargs)
-            alphas, ws = vren.composite_alpha_fw(sigmas.contiguous(), results['deltas'].contiguous(), rays_a.contiguous(), kwargs.get('T_threshold', 1e-4))
             weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
             cos_theta = torch.sum(kwargs['up_vector'][None, :]*normals_pred_origin, dim=-1) # for every sample
             semantic_mask = torch.argmax(semantics_origin, dim=-1) != kwargs.get("sky_label", 4)
-            results['alphas'] = (ws * weighted_sigmoid(cos_theta, 50, 0.85) * semantic_mask.float()) # work as g.t.
+            scaled_weights = (results['ws'] * 10 * (results['ts'].clamp(min=1.0, max=1.e3))).clamp(0, 1)
+            results['alphas'] = (scaled_weights * weighted_sigmoid(cos_theta, 50, 0.8) * semantic_mask.float()) # work as g.t.
 
             rgbs_l = srgb_to_linear(rgbs.float())
             results['rgbs'] = rgbs_l[:, 0] * 0.2126 + rgbs_l[:, 1] * 0.7152 + rgbs_l[:, 2] * 0.0722

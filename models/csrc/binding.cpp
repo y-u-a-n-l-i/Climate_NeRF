@@ -105,6 +105,20 @@ std::vector<torch::Tensor> raymarching_test(
         scale, exp_step_factor, grid_size, max_samples, N_samples);
 }
 
+std::vector<torch::Tensor> test_occ(
+    const torch::Tensor xyz,
+    const torch::Tensor density_bitfield,
+    const int cascades,
+    const float scale,
+    const int grid_size
+){
+    CHECK_INPUT(xyz);
+    CHECK_INPUT(density_bitfield);
+
+    return test_occ_cu(
+        xyz, density_bitfield, cascades, scale, grid_size);
+}
+
 std::vector<torch::Tensor> composite_alpha_fw(
     const torch::Tensor sigmas,
     const torch::Tensor deltas,
@@ -345,6 +359,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
 
     m.def("raymarching_train", &raymarching_train);
     m.def("raymarching_test", &raymarching_test);
+    m.def("test_occ", &test_occ);
     m.def("composite_alpha_fw", &composite_alpha_fw);
     m.def("composite_train_fw", &composite_train_fw);
     m.def("composite_train_bw", &composite_train_bw);

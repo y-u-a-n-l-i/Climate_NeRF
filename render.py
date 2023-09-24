@@ -9,7 +9,7 @@ from PIL import Image
 from tqdm import trange
 from models.networks import NGP
 from models.mb_networks import NGP_mb, vis_net
-from models.rendering import render
+from models.rendering import render, MAX_SAMPLES
 from datasets import dataset_dict
 from datasets.ray_utils import get_rays
 from utils import load_ckpt, guided_filter
@@ -156,7 +156,9 @@ def render_for_test(hparams, split='test'):
             R_inv = dict_['R_inv'].cuda()
             mb_model = NGP_mb(scale=hparams.scale, up=up, ground_height=ground_height,
                                R=R, R_inv=R_inv, interval=hparams.mb_size, rgb_act=rgb_act).cuda()
-            import ipdb; ipdb.set_trace()
+            # for _ in trange(50, desc='updating occ grids'):
+            #     with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            #         model.update_density_grid(0.01*MAX_SAMPLES/3**0.5, warmup=True, aux_model=mb_model)
             load_ckpt(mb_model, ckpt_path, model_name='mb_model')
             snow_occ_net = vis_net(scale=hparams.scale).cuda()
             load_ckpt(snow_occ_net, ckpt_path, model_name='snow_occ_net')
@@ -210,8 +212,10 @@ def render_for_test(hparams, split='test'):
         if hparams.simulate == 'snow':
             render_kwargs['mb_model'] = mb_model
             render_kwargs['snow_occ_net'] = snow_occ_net
+            render_kwargs['cal_snow_occ'] = True
             if hparams.shadow_hint:
                 render_kwargs['sun_vis_net'] = sun_vis_net
+                render_kwargs['pred_shadow'] = True
 
         rays_o = rays[:, :3]
         rays_d = rays[:, 3:6]

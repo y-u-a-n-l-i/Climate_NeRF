@@ -7,7 +7,11 @@ import copy
 import torch
 from .ray_utils import *
 from .color_utils import *
+from mmseg.apis import inference_model, init_model
+import mmcv
+from mmseg.utils import get_classes
 from .base import BaseDataset
+from tqdm import tqdm
 
 def readVariable(fid, name, M, N):
     # rewind
@@ -65,6 +69,10 @@ class KittiDataset(BaseDataset):
             self.image_ids = train_ids
         elif split == 'val' or split == 'test':
             self.image_ids = test_ids
+
+        self.shadow_predictor = None
+        if kwargs.get('use_shadow', False):
+            shadow_predictor = Shadow_predictor(kwargs.get('shadow_ckpt_path', 'pretrained/mtmt/iter_10000.pth'))
 
         # load intrinsics
         calib_dir = os.path.join(root_dir, 'calibration')
@@ -144,7 +152,8 @@ class KittiDataset(BaseDataset):
         labels = []
         depths = []
         poses = []
-        for idx, frameId in enumerate(self.image_ids):
+        shadows = []
+        for idx, frameId in tqdm(enumerate(self.image_ids)):
             pose = cam2world_dict_00[frameId]
             pose[:3, 3] = pose[:3, 3] - self.translation
             poses.append(pose)         
@@ -179,12 +188,15 @@ class KittiDataset(BaseDataset):
             depth = depth.reshape(-1)
             
             depths.append(depth)
+
+            if self.shadow_predictor is not None:
+                shadows += [self.shadow_predictor.predict(image_path)]
             # input_tuples.append((rays, rays_rgb, frameId, intersection, pseudo_label, self.intrinsic_00, 0, depth))
         
         print('load meta_00 done')
     
         # if cfg.use_stereo == True:
-        for idx, frameId in enumerate(self.image_ids):
+        for idx, frameId in tqdm(enumerate(self.image_ids)):
             pose = cam2world_dict_01[frameId]
             pose[:3, 3] = pose[:3, 3] - self.translation
             poses.append(pose)
@@ -201,6 +213,8 @@ class KittiDataset(BaseDataset):
             depth = cv2.resize(depth, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
             depth = depth.reshape(-1)
             depths.append(depth)
+            if self.shadow_predictor is not None:
+                shadows += [self.shadow_predictor.predict(image_path)]
             # input_tuples.append((rays, rays_rgb, frameId, intersection, pseudo_label, self.intrinsic_01, 1, depth))
         print('load meta_01 done')
         # self.metas = input_tuples
@@ -217,6 +231,8 @@ class KittiDataset(BaseDataset):
         render_c2w_f64 = generate_interpolated_path(self.poses.numpy(), 120)[:400]
         self.c2w = render_c2w_f64
         self.render_traj_rays = self.get_path_rays(render_c2w_f64)
+        if self.shadow_predictor is not None:
+            self.shadows = torch.FloatTensor(torch.stack(shadows)).unsqueeze(-1)
         
     def get_path_rays(self, c2w_list):
         rays = {}

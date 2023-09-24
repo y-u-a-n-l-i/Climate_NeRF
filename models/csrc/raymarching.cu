@@ -452,3 +452,66 @@ std::vector<torch::Tensor> raymarching_test_cu(
 
     return {xyzs, dirs, deltas, ts, N_eff_samples};
 }
+
+__global__ void test_occ_kernel(
+    const torch::PackedTensorAccessor32<float, 2, torch::RestrictPtrTraits> xyz,
+    const uint8_t* __restrict__ density_bitfield,
+    const int cascades,
+    const int grid_size,
+    const float scale,
+    torch::PackedTensorAccessor32<uint8_t, 1, torch::RestrictPtrTraits> mask
+){
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
+    if (n >= xyz.size(0)) return;
+
+    const uint32_t grid_size3 = grid_size*grid_size*grid_size;
+    const float grid_size_inv = 1.0f/grid_size;
+
+    const float x = xyz[n][0], y = xyz[n][1], z = xyz[n][2];
+
+    const int mip = mip_from_pos(x, y, z, cascades);
+
+    const float mip_bound = fminf(scalbnf(1.0f, mip-1), scale);
+    const float mip_bound_inv = 1/mip_bound;
+
+    // round down to nearest grid position
+    const int nx = clamp(0.5f*(x*mip_bound_inv+1)*grid_size, 0.0f, grid_size-1.0f);
+    const int ny = clamp(0.5f*(y*mip_bound_inv+1)*grid_size, 0.0f, grid_size-1.0f);
+    const int nz = clamp(0.5f*(z*mip_bound_inv+1)*grid_size, 0.0f, grid_size-1.0f);
+
+    const uint32_t idx = mip*grid_size3 + __morton3D(nx, ny, nz);
+    const bool occ = density_bitfield[idx/8] & (1<<(idx%8));
+    if (occ){
+        mask[n] += 1;
+    }
+}
+
+
+std::vector<torch::Tensor> test_occ_cu(
+    const torch::Tensor xyz,
+    const torch::Tensor density_bitfield,
+    const int cascades,
+    const float scale,
+    const int grid_size
+){
+    const int N_samples = xyz.size(0);
+
+    auto mask = torch::zeros({N_samples},
+                            torch::dtype(torch::kUInt8).device(xyz.device()));
+
+    const int threads = 256, blocks = (N_samples+threads-1)/threads;
+
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(xyz.type(), "test_occ_cu", 
+    ([&] {
+        test_occ_kernel<<<blocks, threads>>>(
+            xyz.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
+            density_bitfield.data_ptr<uint8_t>(),
+            cascades,
+            grid_size,
+            scale,
+            mask.packed_accessor32<uint8_t, 1, torch::RestrictPtrTraits>()
+        );
+    }));
+
+    return {mask};
+}

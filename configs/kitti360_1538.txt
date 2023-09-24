@@ -1,9 +1,9 @@
 root_dir = ./KITTI-360
 dataset_name = kitti
 exp_name = seq0_1538-1601
-batch_size = 1024
+batch_size = 2048
 scale = 8.0
-num_epochs = 150
+num_epochs = 80
 
 kitti_scene = seq0_1538-1601
 start = 1538

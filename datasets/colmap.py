@@ -5,9 +5,12 @@ import glob
 from tqdm import tqdm
 
 from .ray_utils import *
-from .color_utils import read_image, read_semantic
+from .color_utils import read_image, Shadow_predictor
 from .colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
+from mmseg.apis import inference_model, init_model
+import mmcv
+from mmseg.utils import get_classes
 
 from .base import BaseDataset
 
@@ -85,20 +88,25 @@ class ColmapDataset(BaseDataset):
         perm = np.argsort(img_names)
         if '360' in self.root_dir and self.downsample<1: # mipnerf360 data
             folder = f'images_{int(1/self.downsample)}'
-            if kwargs.get('use_sem', False):
-                semantics = f'semantic_{int(1/self.downsample)}'
         else:
             folder = 'images'
-            if kwargs.get('use_sem', False):
-                semantics = 'semantic'
+
+        sem_model = None
+        if kwargs.get('use_sem', False):
+            config_file = kwargs.get('sem_conf_path', 'pretrained/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes.py')
+            checkpoint_file = kwargs.get('sem_ckpt_path', 'pretrained/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth')
+            palette = 'cityscapes'
+            print(f"Load segmentation model from {checkpoint_file}")
+            sem_model = init_model(config_file, checkpoint=checkpoint_file, device='cuda')
+            sem_model.CLASSES = get_classes(palette)
+
+        shadow_predictor = None
+        if kwargs.get('use_shadow', False):
+            shadow_predictor = Shadow_predictor(kwargs.get('shadow_ckpt_path', 'pretrained/mtmt/iter_10000.pth'))
+
         # read successfully reconstructed images and ignore others
         img_paths = [os.path.join(self.root_dir, folder, name)
                      for name in sorted(img_names)]
-        if kwargs.get('use_sem', False):
-            sem_paths = []
-            for name in sorted(img_names):
-                sem_file_name = os.path.splitext(name)[0]+'.pgm'             
-                sem_paths.append(os.path.join(self.root_dir, semantics, sem_file_name))
         w2c_mats = []
         bottom = np.array([[0, 0, 0, 1.]])
         for k in imdata:
@@ -123,6 +131,8 @@ class ColmapDataset(BaseDataset):
         self.rays = []
         if kwargs.get('use_sem', False):
             self.labels = []
+        if kwargs.get('use_shadow', False):
+            self.shadows = []
         if split == 'test_traj': # use precomputed test poses
             self.poses = create_spheric_poses(1.2, self.poses[:, 1, 3].mean(), )
             self.poses = torch.FloatTensor(self.poses)
@@ -222,16 +232,29 @@ class ColmapDataset(BaseDataset):
 
             self.rays += [torch.cat(buf, 1)]
 
+            if kwargs.get('use_sem', False):
+                result = inference_model(sem_model, img_path)
+                label = result.pred_sem_seg.data.reshape(-1).cpu()
+                label[torch.logical_or(label==0, label==1)] = 0 # road
+                label[torch.logical_and(label<=7, label>=2)] = 1
+                label[label==8] = 2
+                label[label==9] = 3
+                label[label==10] = 4
+                label[torch.logical_or(label==11, label==12)] = 5
+                label[label>=13] = 6
+                self.labels += [label]
+            
+            if kwargs.get('use_shadow', False):
+                shadows += [shadow_predictor.predict(img_path)]            
+
         self.rays = torch.stack(self.rays) # (N_images, hw, ?)
         self.poses = torch.FloatTensor(self.poses) # (N_images, 3, 4)
         
-        if kwargs.get('use_sem', False):
-            classes = kwargs.get('classes', 7)
-            for sem_path in sem_paths:
-                label = read_semantic(sem_path=sem_path, sem_wh=self.img_wh, classes=classes)
-                self.labels += [label]
-            
-            self.labels = torch.LongTensor(np.stack(self.labels))
+        if kwargs.get('use_sem', False):            
+            self.labels = torch.LongTensor(torch.stack(self.labels))
+        
+        if kwargs.get('use_shadow', False):
+            self.shadows = torch.FloatTensor(torch.stack(self.shadows)).unsqueeze(-1)
         
         if split=='test':
             self.render_traj_rays = self.get_path_rays(render_c2w_f64)

@@ -64,6 +64,14 @@ std::vector<torch::Tensor> raymarching_test_cu(
     const int N_samples
 );
 
+std::vector<torch::Tensor> test_occ_cu(
+    const torch::Tensor xyz,
+    const torch::Tensor density_bitfield,
+    const int cascades,
+    const float scale,
+    const int grid_size
+);
+
 std::vector<torch::Tensor> composite_alpha_fw_cu(
     const torch::Tensor sigmas,
     const torch::Tensor deltas,

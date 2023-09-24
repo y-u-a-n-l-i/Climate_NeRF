@@ -5,5 +5,13 @@
         "activityBar.background": "#1F3304",
         "titleBar.activeBackground": "#2B4806",
         "titleBar.activeForeground": "#F5FDE9"
+    },
+    "files.associations": {
+        "*.ipynb": "python",
+        "array": "cpp",
+        "bitset": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp"
     }
 }

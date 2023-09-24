@@ -43,7 +43,7 @@ def construct_vox_points_closest(xyz_val, vox_res, partition_xyz=None, space_min
 
 @torch.no_grad()
 def get_ground_plane(hparams, dataset, model, embedding_a, ground_label=0):
-    print("calculating groundl plane")
+    print("calculating ground plane")
     train_rays = {}
     print("generating rays' origins and directions")
     for img_idx in trange(len(dataset.poses)):

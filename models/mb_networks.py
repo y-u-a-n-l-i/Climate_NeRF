@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import tinycudann as tcnn
 import numpy as np
 from .ref_util import *
+import vren
 
 def wrap_light(L, dir, wrap=8):
     '''
@@ -55,6 +56,17 @@ def dkernel_function(density_o, R, r):
     ddensity_dr = torch.clamp(ddensity_dr, max=-1e-4)
     return ddensity_dr
 
+def contract_to_unisphere(
+    x: torch.Tensor,
+    #  ord: Union[float, int] = float("inf"),
+    eps: float = 1e-9,
+):
+    mag = torch.linalg.norm(x, ord=2, dim=-1, keepdim=True)
+    mask = mag.squeeze(-1) > 1
+    
+    x[mask] = (2 - 1 / (mag[mask]+eps)) * (x[mask] / (mag[mask]+eps)) # [-2, 2]
+    return (x+2)/4
+
 class NGP_mb(nn.Module):
     def __init__(self, scale, up, ground_height, R, R_inv, interval, b=1.5, rgb_act='Sigmoid'):
         super().__init__()
@@ -77,7 +89,7 @@ class NGP_mb(nn.Module):
         self.b = b
 
         # constants
-        L_mb = 16; F_mb = 2; log2_T_mb = 19; N_min_mb = 16
+        L_mb = 8; F_mb = 2; log2_T_mb = 19; N_min_mb = 32
         b_mb = np.exp(np.log(2048*scale/N_min_mb)/(L_mb-1))
         print(f'GridEncoding for metaball: Nmin={N_min_mb} b={b_mb:.5f} F={F_mb} L={L_mb}')
 
@@ -132,12 +144,14 @@ class NGP_mb(nn.Module):
         Outputs:
             sigmas: (N)
         """
-
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
-        h = self.mb_encoder(x)
+        # x = contract_to_unisphere(x)
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            h = self.mb_encoder(x)
         h = self.mb_net(h)
         alphas = self.mb_act(h[:, 0])
-        h = self.grey_encoder(x)
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            h = self.grey_encoder(x)
         h = self.rgb_net(h)
         rgbs = self.rgb_act(h[:, 0:])
         
@@ -157,7 +171,7 @@ class NGP_mb(nn.Module):
         
         return alphas, rgbs.squeeze(-1)
 
-    def forward_test(self, x, **kwargs):
+    def forward_test(self, x, density_only=False, geometry_model=None, **kwargs):
         """
         Inputs:
             x: (N, 3) xyz in [-scale, scale]
@@ -166,9 +180,9 @@ class NGP_mb(nn.Module):
             sigmas: (N)
             rgbs: (N, 3)
         """
-        with torch.set_grad_enabled(not kwargs.get('stylize', False)):
+        with torch.no_grad():
             # convert x in colmap coordinate into snow falling coordinate
-            x_sf = torch.matmul(self.R_inv, x.reshape(-1, 3, 1)).reshape(-1, 3)
+            x_sf = torch.matmul(self.R_inv, x.reshape(-1, 3, 1)).reshape(-1, 3) # in snow falling direction
             # x_sf = x
             N_samples = x_sf.shape[0]
             
@@ -202,18 +216,24 @@ class NGP_mb(nn.Module):
             x_sf_grad = torch.cat(x_sf_grad, dim=0) # (N_samples * mb_cascade * 8, 3)
             
             alpha, rgbs = self.alpha(x_sf_vertices) # (N_samples * mb_cascade * 8)
+
             x_sf_colmap = torch.matmul(self.R, x_sf_vertices.reshape(-1, 3, 1)).reshape(-1, 3)
+            if geometry_model is not None:
+                valid_mask = vren.test_occ(x_sf_colmap, geometry_model.density_bitfield, geometry_model.cascades,
+                                           geometry_model.scale, geometry_model.grid_size)[0]
+                alpha[valid_mask<1] *= 0
+
             if kwargs.get('cal_snow_occ', False):
                 weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
-                snow_occ = 2 * weighted_sigmoid(kwargs['snow_occ_net'](x_sf_colmap), 3, 0.001) - 1
+                snow_occ = weighted_sigmoid(kwargs['snow_occ_net'](x_sf_colmap), 5, 0.6)
                 alpha *= snow_occ
 
             rgbs = (rgbs+4)/(1+4) # value can be tuned
             if kwargs.get('pred_shadow', False):
-                shadow = 0.7*kwargs['sun_vis_net'](x_sf_colmap) + 0.3 # value can be tuned
+                shadow = 0.7*(kwargs['sun_vis_net'](x_sf_colmap)>0.5).float() + 0.3 # value can be tuned
                 rgbs *= shadow[:, None]
             
-            density_c = alpha * kwargs.get('center_density', 5e3) # (N_samples * mb_cascade * 8)
+            density_c = alpha * kwargs.get('center_density', 2e3) # (N_samples * mb_cascade * 8)
             density_sample = kernel_function(density_c, x_sf_radius, x_sf_dis) # (N_samples * mb_cascade * 8)
             ddensity_sample_dxsf = dkernel_function(density_c, x_sf_radius, x_sf_dis)[:, None] * x_sf_grad
             
@@ -224,6 +244,13 @@ class NGP_mb(nn.Module):
             rgbs = torch.stack(rgbs, dim=1).reshape(N_samples, 8*self.mb_cascade) * sigmas.view(N_samples, 8*self.mb_cascade) # (N_samples, 8*mb_cascade, 1)
             sigmas = torch.sum(sigmas.view(N_samples, self.mb_cascade*8), dim=-1)
             rgbs = (torch.sum(rgbs, dim=-1, keepdim=True) / (sigmas.view(N_samples, 1)+1e-6)).expand(-1, 3)
+            
+            weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
+            thres_ratio = kwargs.get('mb_thres', 1/8)
+            thres = weighted_sigmoid(sigmas, 50, kwargs.get('center_density', 2e3) * thres_ratio)
+            sigmas = sigmas * thres
+            if density_only:
+                return sigmas 
             
             ddensities_dxsf = torch.chunk(ddensity_sample_dxsf, self.mb_cascade, dim=0)
             normals = torch.stack(ddensities_dxsf, dim=1) # (N_samples*8, mb_cascade, 3)
@@ -240,7 +267,7 @@ class vis_net(nn.Module):
         self.register_buffer('xyz_min', -torch.ones(1, 3)*scale)
         self.register_buffer('xyz_max', torch.ones(1, 3)*scale)
 
-        L = 16; F = 2; log2_T = 19; N_min = 16
+        L = 8; F = 2; log2_T = 19; N_min = 32
         b = np.exp(np.log(2048*scale/N_min)/(L-1))
         print(f'GridEncoding for vis: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
 
@@ -259,14 +286,16 @@ class vis_net(nn.Module):
                 })
         
         self.vis_net = nn.Sequential(
-            nn.Linear(self.vis_encoder.n_output_dims, 64),
+            nn.Linear(self.vis_encoder.n_output_dims, 32),
             nn.ReLU(),
-            nn.Linear(64, 1),
+            nn.Linear(32, 1),
             nn.Sigmoid()
         )
 
     def forward(self, x):
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
-        x_enc = self.vis_encoder(x)
+        # x = contract_to_unisphere(x)
+        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            x_enc = self.vis_encoder(x)
         vis = self.vis_net(x_enc)
         return vis[:, 0]
