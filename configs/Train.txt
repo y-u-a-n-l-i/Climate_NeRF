@@ -15,10 +15,10 @@ render_rgb = True
 render_depth = False
 
 ### render derived normal or not
-render_normal = False
+render_normal = True
 
 ### render semantic labels or not, set to False if no g.t. semantic labels
-render_semantic = False
+render_semantic = True
 sem_conf_path = ../ckpts/mmseg/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
 sem_ckpt_path = ../ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
 styl_img_path = ./styl_img/autumn.jpg
@@ -28,7 +28,7 @@ embed_a = True
 embed_a_len = 8
 
 ### mask embeddings
-embed_msk = True
+embed_msk = False
 
 random_bg = True
 use_skybox = True

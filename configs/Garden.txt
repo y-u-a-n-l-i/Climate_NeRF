@@ -1,9 +1,10 @@
-root_dir = ./tnt/Horse
-dataset_name = tnt
-exp_name = horse
+root_dir = ./360/garden
+dataset_name = colmap
+exp_name = garden
 batch_size = 2048
-scale = 16.0
+scale = 8.0
 num_epochs = 80
+downsample = 0.25
 
 ### render a camera path(through interpolation between poses)
 render_traj = True 
@@ -21,17 +22,17 @@ render_normal = True
 render_semantic = True
 sem_conf_path = ../ckpts/mmseg/segformer_mit-b5_8xb1-160k_cityscapes-1024x1024.py
 sem_ckpt_path = ../ckpts/mmseg/segformer_mit-b5_8x1_1024x1024_160k_cityscapes_20211206_072934-87a052ec.pth
-styl_img_path = ./styl_img/autumn.jpg
+styl_img_path = ./styl_img/winter.jpg
 
 ### appearance embeddings
 embed_a = True
-embed_a_len = 8
+embed_a_len = 4
 
 ### mask embeddings
-embed_msk = True
+embed_msk = False
 
 random_bg = True
-use_skybox = True
+use_skybox = False
 
 ## smog
 depth_bound = 0.9
@@ -39,13 +40,13 @@ sigma = 0.5
 rgb_smog = [0.925, 0.906, 0.758] 
 
 ## flood
-depth_path = results/tnt/horse/depth_raw.npy
-water_height = -0.06
+depth_path = results/tnt/playground/depth_raw.npy
+water_height = 0.0
 rgb_water = [0.488, 0.406, 0.32]
 refraction_idx = 1.35
 gf_r = 5
 gf_eps = 0.1
 gl_theta = 0.008
 gl_sharpness = 500
-wave_len = 1.0
-wave_ampl = 2000000
+wave_len = 0.2
+wave_ampl = 500000

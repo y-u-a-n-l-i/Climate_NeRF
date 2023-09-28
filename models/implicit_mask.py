@@ -34,6 +34,7 @@ class implicit_mask(nn.Module):
         )
 
     def forward(self, uvi):
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
         uvi_enc = self.mask_encoder(uvi)
         mask = self.mask_net(uvi_enc)
         return mask

@@ -2,16 +2,8 @@
     "workbench.colorCustomizations": {
         "editor.lineHighlightBackground": "#1073cf2d",
         "editor.lineHighlightBorder": "#9fced11f",
-        "activityBar.background": "#1F3304",
-        "titleBar.activeBackground": "#2B4806",
-        "titleBar.activeForeground": "#F5FDE9"
-    },
-    "files.associations": {
-        "*.ipynb": "python",
-        "array": "cpp",
-        "bitset": "cpp",
-        "string_view": "cpp",
-        "initializer_list": "cpp",
-        "utility": "cpp"
+        "activityBar.background": "#511640",
+        "titleBar.activeBackground": "#711F5A",
+        "titleBar.activeForeground": "#FDF8FC"
     }
 }

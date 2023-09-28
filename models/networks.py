@@ -154,15 +154,15 @@ class NGP(nn.Module):
         """
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
 
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            with torch.set_grad_enabled(grad):
-                h = self.xyz_encoder(x)
-                h = self.xyz_net(h)
-                sigmas = self.sigma_act(h[:, 0]-1)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        with torch.set_grad_enabled(grad):
+            h = self.xyz_encoder(x)
+            h = self.xyz_net(h)
+            sigmas = self.sigma_act(h[:, 0]-1)
         if return_feat: 
-            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-                with torch.set_grad_enabled(grad_feat):
-                    feat_rgb = self.rgb_encoder(x)
+            # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            with torch.set_grad_enabled(grad_feat):
+                feat_rgb = self.rgb_encoder(x)
             return sigmas, feat_rgb
         return sigmas
 
@@ -175,7 +175,7 @@ class NGP(nn.Module):
                 inputs=x,
                 grad_outputs=torch.ones_like(sigmas, requires_grad=False).cuda(),
                 retain_graph=True,
-                # create_graph=True
+                create_graph=True
                 )[0]
         return sigmas, feat_rgb, grads
     
@@ -189,9 +189,14 @@ class NGP(nn.Module):
             sigmas: (N)
             rgbs: (N, 3)
         """
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
         sigmas, feat_rgb, grads = self.grad(x)
+        if torch.any(torch.isnan(sigmas)):
+            print('sigmas contains nan')
+        if torch.any(torch.isinf(sigmas)):
+            print('sigmas contains inf')
         cnt = torch.sum(torch.isinf(grads))
-        grads = grads.detach()
+        # grads = grads.detach()
         if torch.any(torch.isnan(grads)):
             print('grads contains nan')
         if torch.any(torch.isinf(grads)):

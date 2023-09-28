@@ -146,12 +146,12 @@ class NGP_mb(nn.Module):
         """
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
         # x = contract_to_unisphere(x)
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            h = self.mb_encoder(x)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        h = self.mb_encoder(x)
         h = self.mb_net(h)
         alphas = self.mb_act(h[:, 0])
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            h = self.grey_encoder(x)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        h = self.grey_encoder(x)
         h = self.rgb_net(h)
         rgbs = self.rgb_act(h[:, 0:])
         
@@ -296,7 +296,7 @@ class vis_net(nn.Module):
     def forward(self, x):
         x = (x-self.xyz_min)/(self.xyz_max-self.xyz_min)
         # x = contract_to_unisphere(x)
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            x_enc = self.vis_encoder(x)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        x_enc = self.vis_encoder(x)
         vis = self.vis_net(x_enc)
         return vis[:, 0]

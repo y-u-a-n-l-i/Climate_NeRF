@@ -115,6 +115,8 @@ class NeRFSystem(LightningModule):
         if hparams.embed_a:
             self.embedding_a = torch.nn.Embedding(self.N_imgs, hparams.embed_a_len) 
         ###
+        # self.automatic_optimization = False
+        # self.grad_scaler = torch.cuda.amp.GradScaler(2**10)
         
     def forward(self, batch, split):
         
@@ -146,24 +148,24 @@ class NeRFSystem(LightningModule):
             kwargs['embedding_a'] = embedding_a
         
         if split == 'train':
-            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-                res = render(self.model, rays_o, rays_d, **kwargs)
+            # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            res = render(self.model, rays_o, rays_d, **kwargs)
             return res
         else:
-            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-                chunk_size = self.hparams.chunk_size
-                all_ret = {}
-                for i in range(0, rays_o.shape[0], chunk_size):
-                    ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
-                    for k in ret:
-                        if k not in all_ret:
-                            all_ret[k] = []
-                        all_ret[k].append(ret[k])
-                for k in all_ret:
-                    if k in ['total_samples']:
-                        continue
-                    all_ret[k] = torch.cat(all_ret[k], 0)
-                all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
+            # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+            chunk_size = self.hparams.chunk_size
+            all_ret = {}
+            for i in range(0, rays_o.shape[0], chunk_size):
+                ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
+                for k in ret:
+                    if k not in all_ret:
+                        all_ret[k] = []
+                    all_ret[k].append(ret[k])
+            for k in all_ret:
+                if k in ['total_samples']:
+                    continue
+                all_ret[k] = torch.cat(all_ret[k], 0)
+            all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
             return all_ret
                 
     def setup(self, stage):
@@ -222,7 +224,7 @@ class NeRFSystem(LightningModule):
                                     self.hparams.num_epochs,
                                     self.hparams.lr/30)      
 
-        return opts, [net_sch]
+        return opts, net_sch
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -265,7 +267,8 @@ class NeRFSystem(LightningModule):
                     'semantic': self.hparams.render_semantic,
                     'depth_mono': self.hparams.depth_mono,
                     'embed_msk': self.hparams.embed_msk,
-                    'step': self.global_step}
+                    'step': self.global_step,
+                    'sky_label': self.hparams.sky_label}
         if self.hparams.embed_msk:
             loss_kwargs['mask'] = mask
         loss_d = self.loss(results, batch, **loss_kwargs)
@@ -312,6 +315,13 @@ class NeRFSystem(LightningModule):
                 import ipdb; ipdb.set_trace()
 
         return loss
+        # opt = self.optimizers()
+        # sch = self.lr_schedulers()
+        # opt.zero_grad()
+        # self.grad_scaler.scale(loss).backward()
+        # opt.step()
+        # if (self.global_step+1)%1000 == 0:
+        #     sch.step()
         
     def on_validation_start(self):
         torch.cuda.empty_cache()
@@ -406,7 +416,8 @@ if __name__ == '__main__':
                       devices=1,
                       num_sanity_val_steps=-1 if hparams.val_only else 0,
                       precision=32,
-                      gradient_clip_val=50)
+                      gradient_clip_val=50
+                      )
 
     trainer.fit(system, ckpt_path=hparams.ckpt_path)
 

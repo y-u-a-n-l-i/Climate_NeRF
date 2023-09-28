@@ -101,8 +101,8 @@ density = []
 with torch.no_grad():
     for i in range(0, samples.shape[0], chunk_size):
         samples_ = samples[i:i+chunk_size]
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            tmp = model.density(samples_)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        tmp = model.density(samples_)
         density.append(tmp.cpu())
 
 density = torch.stack(density, dim=0)

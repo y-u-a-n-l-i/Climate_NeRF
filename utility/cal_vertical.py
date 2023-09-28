@@ -72,11 +72,11 @@ def get_ground_plane(hparams, dataset, model, embedding_a, ground_label=0):
         rays_d = rays[:, 3:6]
         results = {}
         chunk_size = hparams.chunk_size
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            if chunk_size > 0:
-                results = render_chunks(model, rays_o, rays_d, chunk_size, **render_kwargs)
-            else:
-                results = render(model, rays_o, rays_d, **render_kwargs)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        if chunk_size > 0:
+            results = render_chunks(model, rays_o, rays_d, chunk_size, **render_kwargs)
+        else:
+            results = render(model, rays_o, rays_d, **render_kwargs)
         ground_points.append(results['depth_xyz'][(results['semantic']==ground_label).squeeze(-1)])
     
     ground_points = torch.cat(ground_points, dim=0)

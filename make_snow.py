@@ -148,8 +148,8 @@ class SnowSystem(LightningModule):
             embedding_a = self.embedding_a(torch.tensor([0]).cuda()).detach().expand_as(embedding_a)
             kwargs_['embedding_a'] = embedding_a
 
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            res = render(self.model, rays_o, rays_d, **kwargs_)
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        res = render(self.model, rays_o, rays_d, **kwargs_)
         return res
 
     def setup(self, stage):

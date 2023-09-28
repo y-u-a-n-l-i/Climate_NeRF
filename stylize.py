@@ -123,25 +123,25 @@ class StylizeSystem(LightningModule):
             embedding_a = self.embedding_a(torch.tensor([0]).cuda()).detach().expand_as(embedding_a)
             kwargs['embedding_a'] = embedding_a
 
-        with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
-            if split == 'train':
-                return render(self.model, rays_o, rays_d, **kwargs)
-            else:
-                chunk_size = 8192
-                all_ret = {}
-                for i in range(0, rays_o.shape[0], chunk_size):
-                    ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
-                    for k in ret:
-                        if k not in all_ret:
-                            all_ret[k] = []
-                        all_ret[k].append(ret[k])
-                for k in all_ret:
-                    if k in ['total_samples']:
-                        continue
-                    all_ret[k] = torch.cat(all_ret[k], 0)
-                # all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret and k not in ['total_samples']}
-                all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
-                return all_ret
+        # with torch.cuda.amp.autocast(enabled=True, dtype=torch.float32):
+        if split == 'train':
+            return render(self.model, rays_o, rays_d, **kwargs)
+        else:
+            chunk_size = 8192
+            all_ret = {}
+            for i in range(0, rays_o.shape[0], chunk_size):
+                ret = render(self.model, rays_o[i:i+chunk_size], rays_d[i:i+chunk_size], **kwargs)
+                for k in ret:
+                    if k not in all_ret:
+                        all_ret[k] = []
+                    all_ret[k].append(ret[k])
+            for k in all_ret:
+                if k in ['total_samples']:
+                    continue
+                all_ret[k] = torch.cat(all_ret[k], 0)
+            # all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret and k not in ['total_samples']}
+            all_ret['total_samples'] = torch.sum(torch.tensor(all_ret['total_samples']))
+            return all_ret
 
     def setup(self, stage):
         dataset = dataset_dict[self.hparams.dataset_name]

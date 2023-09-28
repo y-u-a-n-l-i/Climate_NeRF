@@ -291,12 +291,12 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
                                 rays_a, kwargs.get('T_threshold', 1e-4), kwargs.get('classes', 7))
 
     if not kwargs.get("stylize", False) and not kwargs.get('make_snow', False):
-        normals_raw = normals_raw.detach()
+        # normals_raw = normals_raw.detach()
         normals_diff = (normals_raw-normals_pred)**2
         dirs = F.normalize(dirs, p=2, dim=-1, eps=1e-6)
         normals_ori = torch.clamp(torch.sum(normals_pred*dirs, dim=-1), min=0.)**2 # don't keep dim!
         results['Ro'], results['Rp'] = \
-            RefLoss.apply(sigmas.detach().contiguous(), normals_diff.contiguous(), normals_ori.contiguous(), results['deltas'].contiguous(), results['ts'].contiguous(),
+            RefLoss.apply(sigmas.contiguous(), normals_diff.contiguous(), normals_ori.contiguous(), results['deltas'].contiguous(), results['ts'].contiguous(),
                                 rays_a, kwargs.get('T_threshold', 1e-4))
 
     if kwargs.get('pred_shadow', False):

@@ -113,7 +113,7 @@ class tntDataset(BaseDataset):
             ],
             axis=0,
         )
-        scale = np.linalg.norm(norm_poses[..., 3], axis=-1).max()
+        scale = np.linalg.norm(norm_poses[..., 3], axis=-1).mean()
         print(f"scene scale {scale}")
 ###########################################################
         if self.has_render_traj or render_train:

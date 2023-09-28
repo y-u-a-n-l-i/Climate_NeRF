@@ -20,6 +20,7 @@ This project is tested on:
 - Install torch and torchvision by `pip install torch==1.11.0 torchvision==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu113`
 - Install `torch-scatter` by `pip install torch-scatter -f https://data.pyg.org/whl/torch-1.11.0+cu113.html`
 - Install [PyTorch extension](https://github.com/NVlabs/tiny-cuda-nn#pytorch-extension) from `tinycudann`.
+    - Installing with float32 precision according to [#51](https://github.com/NVlabs/tiny-cuda-nn/issues/51) is recommended.
 - Install [mmsegmentation](https://mmsegmentation.readthedocs.io/en/latest/get_started.html) and download config and checkpoint files according to their instruction.
     - segmentation model `segformer_mit-b5_8xb1-160k_cityscapes-1024x1024` is recommended.
 - Install dependences of shadow predictor [MTMT](https://github.com/eraserNut/MTMT) by `pip3 install --no-build-isolation git+https://github.com/lucasb-eyer/pydensecrf.git`.
@@ -75,6 +76,7 @@ We mainly test our project on garden scene in [mipnerf360 dataset](http://storag
 ## Train
 
 ### Scene reconstruction with semantic predictions.
+To train our model with semantic predictions, users need to set `render_semantic` in config files to be `True`. Moreover, users need to set `$SEM_CONF` and `$SEM_CKPT` to where they put semantic config file and predictor's checkpoint which downloaded from [mmsegmentation](https://mmsegmentation.readthedocs.io/en/latest/get_started.html).
 ### Model Parameters
 <!-- - You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui). -->
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)

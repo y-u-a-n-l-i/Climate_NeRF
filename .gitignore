@@ -149,5 +149,6 @@ data
 tnt
 360
 pretrained
-run.sh
+*.sh
 KITTI-360
+.vscode
