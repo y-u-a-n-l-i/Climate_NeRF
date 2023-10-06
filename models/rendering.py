@@ -328,8 +328,7 @@ def __render_rays_train(model, rays_o, rays_d, hits_t, **kwargs):
             weighted_sigmoid = lambda x, weight, bias : 1./(1+torch.exp(-weight*(x-bias)))
             cos_theta = torch.sum(kwargs['up_vector'][None, :]*normals_pred_origin, dim=-1) # for every sample
             semantic_mask = torch.argmax(semantics_origin, dim=-1) != kwargs.get("sky_label", 4)
-            scaled_weights = (results['ws'] * 10 * (results['ts'].clamp(min=1.0, max=1.e3))).clamp(0, 1)
-            results['alphas'] = (scaled_weights * weighted_sigmoid(cos_theta, 50, 0.8) * semantic_mask.float()) # work as g.t.
+            results['alphas'] = (results['ws'] * weighted_sigmoid(cos_theta, 50, 0.8) * semantic_mask.float()) # work as g.t.
 
             rgbs_l = srgb_to_linear(rgbs.float())
             results['rgbs'] = rgbs_l[:, 0] * 0.2126 + rgbs_l[:, 1] * 0.7152 + rgbs_l[:, 2] * 0.0722
