@@ -23,5 +23,5 @@ cython==0.29.36
 tensorboard
 open3d
 cupy
-pynvtrc
+pynvrtc
 pillow==9.5.0
