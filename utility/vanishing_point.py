@@ -70,8 +70,9 @@ def main():
     parser.add_argument('-downsample', type=float, default=1.0)
     args = parser.parse_args()
 
+    kwargs = {}
     dataset_class = dataset_dict[args.dataset]
-    dataset = dataset_class(root_dir=args.root_dir, downsample=args.downsample)
+    dataset = dataset_class(root_dir=args.root_dir, split='train', downsample=args.downsample, **kwargs)
 
     K = dataset.K.numpy() #(3, 3)
     poses = dataset.poses.numpy() #(n, 3, 4)
