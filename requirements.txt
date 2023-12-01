@@ -25,3 +25,4 @@ open3d
 cupy
 pynvrtc
 pillow==9.5.0
+lu_vp_detect

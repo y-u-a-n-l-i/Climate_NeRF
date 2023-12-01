@@ -80,6 +80,11 @@ To train our model with semantic predictions, users need to set `render_semantic
 ### Model Parameters
 <!-- - You can find the model checkpoints [here](https://uofi.box.com/s/hwcq1f69oo2he6w4pbwwtg3rdrs1pzui). -->
 - Dowload plane parameters [here](https://uofi.box.com/s/pawqf4qmwpxcic09fk9sybc285r3yrrc), which are used in flood simulation. Please put the scene-specific `plane.npy` in the folder of dataset (e.g. `TanksAndTempleBG/Playground/plane.npy`)
+- In order to estimate plane parameters for new scenes, please run the following script:
+
+```bash
+python -m utility.vanishing_point --dataset <DATASET_TYPE> -root_dir <DATA_ROOT> -output plane.npy
+```
 
 ## 🌦️Usage
 The configuration of each scene could be adjusted in the config files under `configs/`, and we provide partial training/rendering/simulation scripts under `scripts/`.
